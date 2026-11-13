@@ -1,0 +1,9 @@
+{
+  "workbench.iconTheme": "vscode-icons",
+  "files.exclude": {
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/__pycache__": true
+  },
+  "editor.formatOnSave": true
+}

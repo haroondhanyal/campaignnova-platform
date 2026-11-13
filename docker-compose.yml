@@ -1,0 +1,30 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      CAMPAIGNNOVA_ENV: ${CAMPAIGNNOVA_ENV:-development}
+      CAMPAIGNNOVA_DB_PATH: ./data/campaignnova.sqlite3
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CAMPAIGNNOVA_PUBLIC_WEB_URL: ${CAMPAIGNNOVA_PUBLIC_WEB_URL:-http://localhost:3000}
+      CAMPAIGNNOVA_SECURE_COOKIES: ${CAMPAIGNNOVA_SECURE_COOKIES:-false}
+      CAMPAIGNNOVA_BOOTSTRAP_TOKEN: ${CAMPAIGNNOVA_BOOTSTRAP_TOKEN:-}
+      CAMPAIGNNOVA_WEB_ORIGINS: ${CAMPAIGNNOVA_WEB_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+    volumes:
+      - ./backend:/app
+      - ./backend/data:/app/data
+  web:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    depends_on:
+      - api
