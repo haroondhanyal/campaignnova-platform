@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as RawResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from .. import database
 from ..services.audit import record_audit_event
@@ -23,6 +23,7 @@ from ..services.audit import record_audit_event
 router = APIRouter(prefix="/auth", tags=["authentication"])
 SESSION_COOKIE = "campaignnova_session"
 SESSION_HOURS = 12
+REMEMBER_DAYS = 30
 RESET_MINUTES = 30
 DEPARTMENTS = (
     "Administration", "Marketing", "Commercial", "CVM", "Segments", "Customer Care",
@@ -76,6 +77,27 @@ DEPARTMENT_MODULES = {
     "Engineering": {"integrations", "channel-management", "settings", "audit-logs"},
     "Human Resources": set(),
 }
+MODULE_TITLES = {
+    "scenario-studio": "Scenario Studio", "campaign-studio": "Campaign Studio",
+    "campaign-calendar": "Campaign Calendar", "customer-360": "Customer 360",
+    "audience-segments": "Audience & Segments", "ai-segment-builder": "AI Segment Builder",
+    "offer-management": "Offer Management", "journey-orchestration": "Journey Orchestration",
+    "workflow-automation": "Workflow Automation", "campaign-execution": "Campaign Execution",
+    "channel-management": "Channel Management", "nova-ai": "Nova AI Assistant",
+    "predictive-intelligence": "Predictive Intelligence", "ab-testing": "A/B Testing",
+    "analytics-insights": "Analytics & Insights", "reports-exports": "Reports & Exports",
+    "integrations": "Data Integration Hub", "business-rules": "Business Rules Engine",
+    "approvals": "Approvals & Governance", "user-roles": "User & Role Management",
+    "audit-logs": "Audit Logs", "settings": "System Configuration", "feature-access": "Feature Access",
+}
+MODULE_KEYS = tuple(MODULE_TITLES)
+DEFAULT_ENABLED_MODULES = ["campaign-studio", "campaign-calendar", "customer-360", "audience-segments", "offer-management", "analytics-insights", "reports-exports", "approvals", "user-roles", "settings", "feature-access"]
+PHONE_LENGTHS = {
+    "+1": (10, 10), "+44": (10, 10), "+971": (9, 9), "+91": (10, 10),
+    "+966": (9, 9), "+974": (8, 8), "+86": (11, 11), "+90": (10, 10),
+    "+61": (9, 9), "+49": (7, 11), "+33": (9, 9), "+880": (10, 10),
+    "+93": (9, 9), "+92": (10, 10),
+}
 _RATE_LIMITS: dict[str, list[float]] = {}
 ROUTE_MODULES = (
     ("/dashboard", "dashboard"), ("/campaigns", "campaign-studio"), ("/scenarios", "scenario-studio"),
@@ -85,10 +107,45 @@ ROUTE_MODULES = (
     ("/ai", "nova-ai"), ("/intelligence", "analytics-insights"), ("/reports", "reports-exports"),
     ("/experiments", "ab-testing"),
 )
+API_MODULE_ALIASES = {
+    "campaign-studio": {"campaign-studio", "campaign-calendar"},
+    "audience-segments": {"audience-segments", "ai-segment-builder"},
+    "integrations": {"integrations", "channel-management"},
+}
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _workspace_settings(tenant_id: str | None = None) -> dict:
+    settings = database.list_records("workspace_settings", tenant_id=tenant_id or database.current_tenant())
+    return next((row for row in settings if row.get("id") == "workspace-defaults"), {})
+
+
+def _enabled_modules(tenant_id: str | None = None) -> list[str]:
+    configured = _workspace_settings(tenant_id).get("enabled_modules")
+    if isinstance(configured, list):
+        return [key for key in MODULE_KEYS if key in configured]
+    tenant = next((row for row in database.list_records("workspace_tenants", tenant_id="*") if row.get("id") == (tenant_id or database.current_tenant())), None)
+    return list(MODULE_KEYS) if not tenant or tenant.get("slug") == "campaignnova-demo" else list(DEFAULT_ENABLED_MODULES)
+
+
+def _department_enabled_modules(department: str, tenant_id: str | None = None) -> set[str]:
+    settings = _workspace_settings(tenant_id)
+    custom = settings.get("department_module_access", {}).get(department)
+    return set(custom) if isinstance(custom, list) else set(DEPARTMENT_MODULES.get(department, set()))
+
+
+def _validate_phone_number(value: str, country_code: str) -> str:
+    if not re.fullmatch(r"[0-9]{7,15}", value):
+        raise ValueError("Enter a phone number using digits only")
+    length_range = PHONE_LENGTHS.get(country_code)
+    if length_range and not length_range[0] <= len(value) <= length_range[1]:
+        low, high = length_range
+        expected = f"{low}" if low == high else f"{low}–{high}"
+        raise ValueError(f"Enter a {expected}-digit national phone number for this country")
+    return value
 
 
 def _utc(value: str) -> datetime:
@@ -102,10 +159,16 @@ def _accounts() -> list[dict]:
 def public_user(user: dict) -> dict:
     public = {key: value for key, value in user.items()
               if key not in {"password_hash", "avatar_data", "avatar_mime", "account_type", "tenant_id"}}
+    tenant_id = user.get("tenant_id", "campaignnova-demo")
     tenant = next((row for row in database.list_records("workspace_tenants", tenant_id="*")
-                   if row.get("id") == user.get("tenant_id", "campaignnova-demo")), None)
-    public["organization_name"] = user.get("organization_name") or (tenant or {}).get("name", "CampaignNova Demo Workspace")
+                   if row.get("id") == tenant_id), None)
+    tenant_settings = _workspace_settings(tenant_id)
+    public["organization_name"] = (tenant or {}).get("name") or user.get("organization_name", "CampaignNova Demo Workspace")
     public["organization_slug"] = user.get("organization_slug") or (tenant or {}).get("slug", "campaignnova-demo")
+    public["enabled_modules"] = _enabled_modules(tenant_id)
+    public["department_modules"] = sorted(_department_enabled_modules(user.get("department", ""), tenant_id))
+    if tenant_settings.get("logo_data"):
+        public["organization_logo_url"] = f"/api/auth/workspaces/{public['organization_slug']}/logo"
     if user.get("avatar_data"):
         public["avatar_url"] = f"/api/auth/users/{user['id']}/avatar"
     return public
@@ -189,16 +252,17 @@ def _save_user(user: dict) -> dict:
     return user
 
 
-def _new_session(response: Response, user: dict) -> None:
+def _new_session(response: Response, user: dict, remember_me: bool = False) -> None:
     token = secrets.token_urlsafe(40)
-    expires_at = _now() + timedelta(hours=SESSION_HOURS)
+    max_age = REMEMBER_DAYS * 24 * 60 * 60 if remember_me else SESSION_HOURS * 3600
+    expires_at = _now() + timedelta(seconds=max_age)
     database.save_record("auth_sessions", _token_hash(token), {
         "id": _token_hash(token), "user_id": user["id"], "tenant_id": user.get("tenant_id", database.current_tenant()), "expires_at": expires_at.isoformat(),
         "created_at": _now().isoformat(),
     })
     secure = (os.getenv("CAMPAIGNNOVA_SECURE_COOKIES", "false").casefold() == "true"
               or os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production")
-    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_HOURS * 3600, httponly=True,
+    response.set_cookie(SESSION_COOKIE, token, max_age=max_age, httponly=True,
                         secure=secure, samesite="lax", path="/")
 
 
@@ -252,6 +316,36 @@ def _request_user(request: Request) -> dict:
     return user
 
 
+def _user_can_access_module(user: dict, module: str) -> bool:
+    if module not in MODULE_TITLES:
+        return False
+    if user.get("role") in ADMIN_ROLES and module in {"settings", "user-roles"}:
+        return True
+    enabled = _enabled_modules(user.get("tenant_id"))
+    if module not in enabled:
+        return False
+    if user.get("role") in ADMIN_ROLES:
+        return True
+    if module == "feature-access":
+        return True
+    department_modules = _department_enabled_modules(user.get("department", ""), user.get("tenant_id"))
+    assigned_modules = user.get("module_access")
+    if isinstance(assigned_modules, list):
+        department_modules = department_modules.intersection(assigned_modules)
+    return module in department_modules
+
+
+def _user_can_access_api_module(user: dict, module: str, path: str, method: str) -> bool:
+    aliases = API_MODULE_ALIASES.get(module, {module})
+    if module == "campaign-studio" and method not in {"GET", "HEAD", "OPTIONS"}:
+        aliases = {"campaign-studio"}
+    if method in {"GET", "HEAD", "OPTIONS"} and path.startswith(
+        ("/journeys", "/business-rules", "/execution")
+    ):
+        aliases = aliases | {"workflow-automation"}
+    return any(_user_can_access_module(user, alias) for alias in aliases)
+
+
 def require_user(request: Request) -> dict:
     user = _request_user(request)
     path = request.url.path.removeprefix("/api")
@@ -259,6 +353,7 @@ def require_user(request: Request) -> dict:
     role = user.get("role")
     method = request.method.upper()
     assistant_chat = path == "/ai/assist"
+    feature_request_submission = method == "POST" and path == "/feature-access/requests"
     if user.get("must_change_password") and path not in {"/auth/password", "/auth/me", "/auth/me/avatar", "/auth/logout"}:
         raise HTTPException(status_code=403, detail="Change your temporary password before accessing workspace data")
     origin = request.headers.get("origin")
@@ -272,22 +367,26 @@ def require_user(request: Request) -> dict:
             raise HTTPException(status_code=403, detail="This area is restricted to administrators")
         if (path.startswith("/integrations") or path.startswith("/admin/settings")) and department != "Technology & IT":
             raise HTTPException(status_code=403, detail="This department does not have integration access")
-        if role in READ_ONLY_ROLES and method not in {"GET", "HEAD", "OPTIONS"} and not assistant_chat:
+        if role in READ_ONLY_ROLES and method not in {"GET", "HEAD", "OPTIONS"} and not assistant_chat and not feature_request_submission:
             raise HTTPException(status_code=403, detail="Your assigned role has read-only access")
         if role == "Approver" and method not in {"GET", "HEAD", "OPTIONS"} and not assistant_chat and not re.fullmatch(r"/approvals/[^/]+/decision", path):
             raise HTTPException(status_code=403, detail="Approver accounts can only decide approval requests")
-        module = next((key for prefix, key in ROUTE_MODULES if path == prefix or path.startswith(prefix + "/")), None)
-        if module and module != "dashboard" and module not in DEPARTMENT_MODULES.get(department, set()) and not assistant_chat:
-            raise HTTPException(status_code=403, detail=f"{department} department cannot access this workspace")
         if method == "PATCH" and re.fullmatch(r"/customers/[^/]+/consent", path) and role not in CONSENT_MANAGEMENT_ROLES:
             raise HTTPException(status_code=403, detail="Consent changes require a customer-value manager or administrator")
-        module_match = re.match(r"^/modules/([^/]+)", path)
-        if module_match:
-            module_key = module_match.group(1)
-            if module_key not in {"dashboard"} and module_key not in DEPARTMENT_MODULES.get(department, set()) and not assistant_chat:
-                raise HTTPException(status_code=403, detail=f"{department} department cannot access this workspace")
         if path.startswith("/admin/settings") and role != "Integration Admin":
             raise HTTPException(status_code=403, detail="Workspace settings are restricted to administrators")
+    module = next((key for prefix, key in ROUTE_MODULES if path == prefix or path.startswith(prefix + "/")), None)
+    if path.startswith("/admin/settings"):
+        module = "settings"
+    elif path.startswith("/admin/users") or path.startswith("/admin/roles"):
+        module = "user-roles"
+    module_match = re.match(r"^/modules/([^/]+)", path)
+    if module_match:
+        module = module_match.group(1)
+    if path.startswith("/feature-access"):
+        module = "feature-access"
+    if module and module != "dashboard" and not _user_can_access_api_module(user, module, path, method):
+        raise HTTPException(status_code=403, detail="This module is not enabled for your account")
     return user
 
 
@@ -339,11 +438,8 @@ class Signup(BaseModel):
 
     @field_validator("phone_number")
     @classmethod
-    def valid_phone_number(cls, value: str) -> str:
-        digits = re.sub(r"[\s()\-]", "", value)
-        if not re.fullmatch(r"\d{7,15}", digits):
-            raise ValueError("Enter a phone number using digits only")
-        return digits
+    def valid_phone_number(cls, value: str, info: ValidationInfo) -> str:
+        return _validate_phone_number(value, info.data.get("phone_country_code", "+92"))
 
     @field_validator("department")
     @classmethod
@@ -372,6 +468,7 @@ class Login(BaseModel):
     workspace_slug: str = Field(min_length=2, max_length=80)
     email: str
     password: str
+    remember_me: bool = False
 
 
 class ForgotPassword(BaseModel):
@@ -406,6 +503,11 @@ class ProfileUpdate(BaseModel):
     def valid_avatar(cls, value: str | None) -> str | None:
         return _validate_avatar(value)
 
+    @field_validator("phone_number")
+    @classmethod
+    def valid_phone_number(cls, value: str, info: ValidationInfo) -> str:
+        return _validate_phone_number(value, info.data.get("phone_country_code", "+92"))
+
 
 class PasswordChange(BaseModel):
     current_password: str
@@ -422,6 +524,32 @@ def setup_status():
     return {"setup_required": False, "departments": list(DEPARTMENTS),
             "roles": list(ROLES), "organization": "CampaignNova",
             "bootstrap_token_required": os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production"}
+
+
+@router.get("/workspaces/{workspace_slug}")
+def workspace_brand(workspace_slug: str):
+    tenant = database.global_record("workspace_tenants", workspace_slug.strip().casefold())
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    logo_url = None
+    settings = _workspace_settings(tenant["id"])
+    if settings.get("logo_data"):
+        logo_url = f"/api/auth/workspaces/{tenant['slug']}/logo"
+    return {"name": tenant["name"], "slug": tenant["slug"], "logo_url": logo_url}
+
+
+@router.get("/workspaces/{workspace_slug}/logo")
+def workspace_logo(workspace_slug: str):
+    tenant = database.global_record("workspace_tenants", workspace_slug.strip().casefold())
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    logo_data = _workspace_settings(tenant["id"]).get("logo_data")
+    if not logo_data:
+        raise HTTPException(status_code=404, detail="No company logo has been uploaded")
+    content = base64.b64decode(logo_data.split(",", 1)[1])
+    mime = logo_data[5:].split(";", 1)[0]
+    return RawResponse(content, media_type=mime,
+                       headers={"Cache-Control": "public, max-age=300", "X-Content-Type-Options": "nosniff"})
 
 
 @router.post("/signup", status_code=201)
@@ -456,6 +584,12 @@ def signup(payload: Signup, response: Response):
         "password_hash": _password_hash(payload.password), "created_at": now, "updated_at": now,
     }
     _save_user(user)
+    if first_account:
+        database.save_record("workspace_settings", "workspace-defaults", {
+            "id": "workspace-defaults", "workspace_name": tenant["name"], "enabled_modules": list(DEFAULT_ENABLED_MODULES),
+            "department_module_access": {}, "logo_data": None, "timezone": "UTC", "currency": "USD",
+            "date_format": "YYYY-MM-DD", "default_channel": "SMS",
+        })
     record_audit_event(user["email"], "account_created", "user", user["id"],
                        {"department": user["department"], "role": user["role"], "status": user["status"]})
     if first_account:
@@ -485,7 +619,7 @@ def login(payload: Login, request: Request, response: Response):
     user["last_login_at"] = _now().isoformat()
     _save_user(user)
     _RATE_LIMITS.pop(limit_key, None)
-    _new_session(response, user)
+    _new_session(response, user, payload.remember_me)
     record_audit_event(user["email"], "signed_in", "user", user["id"])
     return {"user": public_user(user)}
 
@@ -543,7 +677,7 @@ def me(user: dict = Depends(_request_user)):
 @router.patch("/me")
 def update_profile(payload: ProfileUpdate, user: dict = Depends(_request_user)):
     phone = re.sub(r"[\s()\-]", "", payload.phone_number)
-    if not re.fullmatch(r"\d{7,15}", phone):
+    if not re.fullmatch(r"[0-9]{7,15}", phone):
         raise HTTPException(status_code=422, detail="Enter a phone number using 7–15 digits")
     user.update({"display_name": payload.display_name.strip(), "phone_country_code": payload.phone_country_code,
                  "phone_number": phone, "updated_at": _now().isoformat()})

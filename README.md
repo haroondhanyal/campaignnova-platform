@@ -80,6 +80,8 @@ flowchart LR
 
 - **Company login:** enter the workspace code, work email, and password. Login errors do not disclose whether an email exists. Login attempts are rate-limited.
 - **Create account:** the first approved account in a new company workspace is its Super Admin. Later registrations are pending approval. The workspace code is derived from the company name.
+- **Company access:** a new company starts with core modules. Its Super Admin can add modules and upload company branding in System Configuration. Department Managers can allocate only company-enabled features to their own department. Employees can request any module; Super Admin approval enables it for the company and grants it to the requested department and account. The API enforces the same grants as the navigation.
+- **Remember this device:** opts into a longer-lived session cookie. Password saving is handled by the browser; when Chrome offers, save it to Google Password Manager. CampaignNova does not store clear-text passwords.
 - **Password recovery:** configure SMTP to email reset links. In development without SMTP, the API returns a local reset link for developer use. Reset links expire and can only be used once.
 - **Guest demo:** synthetic, read-only sample access with a visible demo banner. It has no password and creates no regular user account.
 - **Google login:** the sign-in screen shows the Google option as unavailable because this repository has no Google OAuth client, callback, or verification configuration. It does not simulate a successful Google login. Configure and implement an identity provider before enabling production Google sign-in.

@@ -1,10 +1,10 @@
-import { Activity, Archive, Bot, Boxes, CalendarDays, ChartNoAxesCombined, CircleHelp, ClipboardCheck, ContactRound, FileBarChart2, FileClock, Gauge, GitBranch, Lightbulb, ListFilter, Map, Megaphone, Network, Package, PanelsTopLeft, Radio, Settings2, ShieldCheck, Sparkles, Users, Workflow } from 'lucide-react';
+import { Activity, Archive, Bot, Boxes, CalendarDays, ChartNoAxesCombined, CircleHelp, ClipboardCheck, ContactRound, FileBarChart2, FileClock, Gauge, GitBranch, Lightbulb, ListFilter, LockKeyhole, Map, Megaphone, Network, Package, PanelsTopLeft, Radio, Settings2, ShieldCheck, Sparkles, Users, Workflow } from 'lucide-react';
 export const navGroups = [
  { label:'Workspace', items:[{title:'Executive Dashboard',href:'/',icon:Gauge},{title:'Scenario Studio',href:'/scenario-studio',icon:Map},{title:'Campaign Studio',href:'/campaign-studio',icon:Megaphone},{title:'Campaign Calendar',href:'/campaign-calendar',icon:CalendarDays},{title:'Customer 360',href:'/customer-360',icon:ContactRound}]},
  { label:'Audience & Offers', items:[{title:'Audience & Segments',href:'/audience-segments',icon:Users},{title:'AI Segment Builder',href:'/ai-segment-builder',icon:Sparkles},{title:'Offer Management',href:'/offer-management',icon:Package}]},
  { label:'Orchestration', items:[{title:'Journey Orchestration',href:'/journey-orchestration',icon:GitBranch},{title:'Workflow Automation',href:'/workflow-automation',icon:Workflow},{title:'Campaign Execution',href:'/campaign-execution',icon:Activity},{title:'Channel Management',href:'/channel-management',icon:Radio}]},
  { label:'Intelligence', items:[{title:'Nova AI Assistant',href:'/nova-ai',icon:Bot},{title:'Predictive Intelligence',href:'/predictive-intelligence',icon:Lightbulb},{title:'A/B Testing',href:'/ab-testing',icon:ChartNoAxesCombined},{title:'Analytics & Insights',href:'/analytics-insights',icon:PanelsTopLeft},{title:'Reports & Exports',href:'/reports-exports',icon:FileBarChart2}]},
- { label:'Platform', items:[{title:'Data Integration Hub',href:'/integrations',icon:Network},{title:'Business Rules Engine',href:'/business-rules',icon:Boxes},{title:'Approvals & Governance',href:'/approvals',icon:ShieldCheck},{title:'User & Role Management',href:'/user-roles',icon:Users},{title:'Audit Logs',href:'/audit-logs',icon:FileClock},{title:'System Configuration',href:'/settings',icon:Settings2}]}
+ { label:'Platform', items:[{title:'Data Integration Hub',href:'/integrations',icon:Network},{title:'Business Rules Engine',href:'/business-rules',icon:Boxes},{title:'Approvals & Governance',href:'/approvals',icon:ShieldCheck},{title:'Feature Access',href:'/feature-access',icon:LockKeyhole},{title:'User & Role Management',href:'/user-roles',icon:Users},{title:'Audit Logs',href:'/audit-logs',icon:FileClock},{title:'System Configuration',href:'/settings',icon:Settings2}]}
 ];
 export const allNav = navGroups.flatMap(g=>g.items);
 const departmentModules:Record<string,Set<string>>={
@@ -32,5 +32,14 @@ const departmentModules:Record<string,Set<string>>={
  'Legal & Regulatory':new Set(['approvals','audit-logs','business-rules','reports-exports']),
  Administration:new Set(allNav.map(item=>item.href.slice(1))),
 };
-export function canSeeModule(user:{role:string;department:string},href:string){if(href==='/')return true;if(['Super Admin','Organization Admin','Admin'].includes(user.role))return true;return departmentModules[user.department]?.has(href.slice(1))||false}
-export function visibleNavGroups(user:{role:string;department:string}){return navGroups.map(group=>({...group,items:group.items.filter(item=>canSeeModule(user,item.href))})).filter(group=>group.items.length>0)}
+export function canSeeModule(user:{role:string;department:string;enabled_modules?:string[];department_modules?:string[];module_access?:string[]|null},href:string){
+ if(href==='/')return true;
+ const module=href.slice(1),isAdmin=['Super Admin','Organization Admin','Admin'].includes(user.role);
+ if(isAdmin&&['settings','user-roles'].includes(module))return true;
+ if(module==='feature-access')return true;
+ if(user.enabled_modules&&!user.enabled_modules.includes(module))return false;
+ if(isAdmin)return true;
+ if(user.module_access&&!user.module_access.includes(module))return false;
+ return user.department_modules?user.department_modules.includes(module):departmentModules[user.department]?.has(module)||false;
+}
+export function visibleNavGroups(user:{role:string;department:string;enabled_modules?:string[];department_modules?:string[];module_access?:string[]|null}){return navGroups.map(group=>({...group,items:group.items.filter(item=>canSeeModule(user,item.href))})).filter(group=>group.items.length>0)}

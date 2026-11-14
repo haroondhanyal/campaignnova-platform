@@ -29,6 +29,7 @@ MODULES = {
     "user-roles": ("User & Role Management", "Maintain a local role catalog and directory plan. API authorization is not enabled."),
     "audit-logs": ("Audit Logs", "Development action requests are recorded in SQLite."),
     "settings": ("System Configuration", "Save workspace preferences and inspect development connection status."),
+    "feature-access": ("Feature Access", "Request optional modules, review approvals, and manage department-level access."),
 }
 PLANNED_MODULES = set()
 

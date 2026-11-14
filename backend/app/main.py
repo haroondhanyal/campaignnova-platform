@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from . import store
 from . import database
-from .routers import administration, ai, approvals, audiences, authentication, business_rules, campaigns, customers, dashboard, execution, experiments, intelligence, integrations, journeys, offers, reports, scenarios, system, workspaces
+from .routers import administration, ai, approvals, audiences, authentication, business_rules, campaigns, customers, dashboard, execution, experiments, feature_access, intelligence, integrations, journeys, offers, reports, scenarios, system, workspaces
 
 
 @asynccontextmanager
@@ -51,6 +51,7 @@ app.add_middleware(
 
 app.include_router(system.router, prefix="/api")
 app.include_router(authentication.router, prefix="/api")
+app.include_router(feature_access.router, prefix="/api")
 
 protected_api = APIRouter(dependencies=[Depends(authentication.require_user)])
 protected_api.include_router(dashboard.router)

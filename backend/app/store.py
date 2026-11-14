@@ -44,7 +44,7 @@ def initialize() -> None:
                          "scenarios": scenarios, "scenario_runs": [], "journeys": [], "business_rules": [],
                          "execution_runs": [], "approvals": [], "audit_events": [], "integrations": [],
                          "workspace_users": [], "workspace_settings": [],
-                         "auth_sessions": [], "password_resets": []})
+                         "auth_sessions": [], "password_resets": [], "feature_requests": []})
     database.save_record("workspace_tenants", "campaignnova-demo", {
         "id": "campaignnova-demo", "slug": "campaignnova-demo", "name": "CampaignNova Demo Workspace",
         "created_at": datetime.now(timezone.utc).isoformat(), "tenant_id": "__global__",

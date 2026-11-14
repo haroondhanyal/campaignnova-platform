@@ -26,6 +26,7 @@ class UserCreate(BaseModel):
     department: str
     role: str
     temporary_password: str
+    module_access: list[str] | None = None
 
     @field_validator("email")
     @classmethod
@@ -54,10 +55,21 @@ class UserCreate(BaseModel):
     def strong_password(cls, value: str) -> str:
         return auth._validate_password(value)
 
+    @field_validator("module_access")
+    @classmethod
+    def valid_module_access(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and (len(value) != len(set(value)) or any(module not in auth.MODULE_TITLES for module in value)):
+            raise ValueError("Choose valid, unique workspace modules")
+        return value
+
     @model_validator(mode="after")
     def role_matches_department(self):
         if not auth.valid_role_department(self.role, self.department):
             raise ValueError("This role is not available in the selected department")
+        if self.module_access is not None and self.role not in auth.ADMIN_ROLES:
+            allowed = auth._department_enabled_modules(self.department)
+            if not set(self.module_access).issubset(allowed & set(auth._enabled_modules())):
+                raise ValueError("Module access must fit the selected department")
         return self
 
 
@@ -65,6 +77,7 @@ class UserUpdate(BaseModel):
     role: str | None = None
     department: str | None = None
     status: Literal["Active", "Pending Approval", "Disabled"] | None = None
+    module_access: list[str] | None = None
 
     @field_validator("role")
     @classmethod
@@ -80,10 +93,24 @@ class UserUpdate(BaseModel):
             raise ValueError("Choose a listed department")
         return value
 
+    @field_validator("module_access")
+    @classmethod
+    def valid_module_access(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and (len(value) != len(set(value)) or any(module not in auth.MODULE_TITLES for module in value)):
+            raise ValueError("Choose valid, unique workspace modules")
+        return value
+
     @model_validator(mode="after")
     def role_matches_department(self):
         if self.role and self.department and not auth.valid_role_department(self.role, self.department):
             raise ValueError("This role is not available in the selected department")
+        if self.module_access is not None:
+            role = self.role
+            department = self.department
+            if role and role not in auth.ADMIN_ROLES and department and not set(self.module_access).issubset(
+                auth._department_enabled_modules(department) & set(auth._enabled_modules())
+            ):
+                raise ValueError("Module access must fit the selected department")
         return self
 
 
@@ -93,6 +120,9 @@ class WorkspaceSettings(BaseModel):
     currency: Literal["PKR", "USD", "EUR", "GBP"] = "USD"
     date_format: Literal["YYYY-MM-DD", "DD MMM YYYY", "MM/DD/YYYY"] = "YYYY-MM-DD"
     default_channel: Literal["SMS", "WhatsApp", "USSD", "Push", "Email", "In-App"] = "SMS"
+    enabled_modules: list[str] = Field(default_factory=lambda: list(auth.MODULE_KEYS))
+    department_module_access: dict[str, list[str]] = Field(default_factory=dict)
+    logo_data: str | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -109,6 +139,33 @@ class WorkspaceSettings(BaseModel):
     def clean_workspace_name(cls, value: str) -> str:
         return value.strip()
 
+    @field_validator("enabled_modules")
+    @classmethod
+    def valid_enabled_modules(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)) or any(module not in auth.MODULE_TITLES for module in value):
+            raise ValueError("Choose valid, unique workspace modules")
+        if not {"settings", "user-roles", "feature-access"}.issubset(value):
+            raise ValueError("System settings, user administration, and feature requests must remain enabled")
+        return value
+
+    @field_validator("department_module_access")
+    @classmethod
+    def valid_department_access(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        for department, modules in value.items():
+            if department not in auth.DEPARTMENTS or not set(modules).issubset(auth.MODULE_KEYS):
+                raise ValueError("Choose known departments and CampaignNova modules")
+        return value
+
+    @field_validator("logo_data")
+    @classmethod
+    def valid_logo(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        image = auth._validate_avatar(value)
+        if len(image.split(",", 1)[1]) * 3 // 4 > 2 * 1024 * 1024:
+            raise ValueError("Company logo must be 2 MB or smaller")
+        return image
+
 
 def _users() -> list[dict]:
     return auth._accounts()
@@ -120,7 +177,11 @@ def list_roles(_: dict = Depends(auth.require_admin)):
         {"name": role, "description": role.replace("&", "and"),
          "departments": sorted(auth.ROLE_DEPARTMENTS.get(role, set()))}
         for role in auth.ROLES
-    ], "departments": list(auth.DEPARTMENTS), "notice": "Accounts, department access, and role permissions are enforced by the API."}
+    ], "departments": list(auth.DEPARTMENTS),
+        "modules": [{"key": key, "title": title} for key, title in auth.MODULE_TITLES.items()],
+        "enabled_modules": auth._enabled_modules(),
+            "department_modules": {department: sorted(auth._department_enabled_modules(department)) for department in auth.DEPARTMENTS},
+        "notice": "Company modules and account-level access are enforced by the API."}
 
 
 @router.get("/users")
@@ -137,12 +198,17 @@ def create_user(payload: UserCreate, current: dict = Depends(auth.require_admin)
     now = datetime.now(timezone.utc).isoformat()
     user = {"id": f"usr-{uuid4().hex[:12]}", "account_type": "user", "display_name": payload.display_name.strip(),
             "email": payload.email, "phone_country_code": payload.phone_country_code,
-            "phone_number": re.sub(r"[\s()\-]", "", payload.phone_number), "department": payload.department,
+            "phone_number": payload.phone_number, "department": payload.department,
             "role": payload.role, "status": "Active", "must_change_password": True,
+            "module_access": payload.module_access,
             "avatar_data": None, "avatar_mime": None, "password_hash": auth._password_hash(payload.temporary_password),
             "created_at": now, "updated_at": now}
-    if not re.fullmatch(r"\d{7,15}", user["phone_number"]):
+    if not re.fullmatch(r"[0-9]{7,15}", user["phone_number"]):
         raise HTTPException(status_code=422, detail="Enter a phone number using 7–15 digits")
+    try:
+        auth._validate_phone_number(user["phone_number"], user["phone_country_code"])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     auth._save_user(user)
     record_audit_event(current["email"], "administrator_created_account", "user", user["id"],
                        {"department": user["department"], "role": user["role"]})
@@ -157,6 +223,13 @@ def update_user(user_id: str, payload: UserUpdate, current: dict = Depends(auth.
     changes = payload.model_dump(exclude_unset=True)
     if not auth.valid_role_department(changes.get("role", user["role"]), changes.get("department", user["department"])):
         raise HTTPException(status_code=422, detail="This role is not available in the selected department")
+    if "module_access" in changes and changes["module_access"] is not None:
+        role = changes.get("role", user["role"])
+        department = changes.get("department", user["department"])
+        if role not in auth.ADMIN_ROLES and not set(changes["module_access"]).issubset(
+            auth._department_enabled_modules(department) & set(auth._enabled_modules())
+        ):
+            raise HTTPException(status_code=422, detail="Module access must fit the selected department")
     if user["id"] == current["id"] and changes.get("status") == "Disabled":
         raise HTTPException(status_code=400, detail="You cannot disable your own active session")
     if changes.get("role") == "Super Admin" and current.get("role") != "Super Admin":
@@ -179,19 +252,37 @@ def get_settings():
     saved = next(iter(database.list_records("workspace_settings")), None)
     tenant = next((item for item in database.list_records("workspace_tenants", tenant_id="*")
                    if item.get("id") == database.current_tenant()), None)
-    defaults = {**DEFAULT_SETTINGS, "workspace_name": (tenant or {}).get("name", "CampaignNova")}
+    defaults = {**DEFAULT_SETTINGS, "workspace_name": (tenant or {}).get("name", "CampaignNova"),
+                "enabled_modules": auth._enabled_modules(), "department_module_access": {}, "logo_data": None}
     saved = dict(saved or {})
-    if saved.get("workspace_name", "").casefold().startswith("ptcl "):
-        saved.pop("workspace_name", None)
+    slug = (tenant or {}).get("slug", "")
     return {**defaults, **saved,
+            "organization_slug": slug,
+            "organization_logo_url": f"/api/auth/workspaces/{slug}/logo" if saved.get("logo_data") else None,
             "runtime": {"database": "SQLite development store", "gemini_configured": gemini.configured(),
                         "live_channel_providers": 0, "authentication": "session-cookie-rbac"}}
 
 
 @router.put("/settings")
-def save_settings(payload: WorkspaceSettings, current: dict = Depends(auth.require_settings_admin)):
-    row = {"id": DEFAULT_SETTINGS["id"], **payload.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}
+def save_settings(payload: WorkspaceSettings, current: dict = Depends(auth.require_admin)):
+    previous = auth._workspace_settings()
+    submitted = payload.model_dump()
+    enabled = set(submitted["enabled_modules"])
+    submitted["department_module_access"] = {
+        department: [module for module in modules if module in enabled]
+        for department, modules in submitted["department_module_access"].items()
+    }
+    row = {**previous, "id": DEFAULT_SETTINGS["id"], **submitted, "updated_at": datetime.now(timezone.utc).isoformat()}
     database.save_record("workspace_settings", row["id"], row)
+    for user in auth._accounts():
+        if isinstance(user.get("module_access"), list):
+            user["module_access"] = [module for module in user["module_access"] if module in enabled]
+            auth._save_user(user)
+    tenant = next((item for item in database.list_records("workspace_tenants", tenant_id="*")
+                   if item.get("id") == database.current_tenant()), None)
+    if tenant:
+        database.save_record("workspace_tenants", tenant["id"], {**tenant, "name": row["workspace_name"]})
     record_audit_event(current["email"], "workspace_settings_updated", "workspace", row["id"],
-                       {"timezone": row["timezone"], "currency": row["currency"]})
+                       {"timezone": row["timezone"], "currency": row["currency"],
+                        "enabled_modules": row["enabled_modules"]})
     return get_settings()
