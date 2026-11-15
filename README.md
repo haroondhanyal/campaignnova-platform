@@ -105,31 +105,31 @@ These captures show the current screens against a temporary documentation worksp
 
 #### Company sign-in and Eid carousel
 
-![Company sign-in and Eid carousel — full-size app screenshot](docs/screenshots/auth/sign-in.jpg)
+![Company sign-in and Eid carousel — full-size app screenshot](docs/screenshots/auth/sign-in.jpg?v=eea9a82)
 
 #### Google OAuth setup dialog
 
-![Google OAuth setup dialog — full-size app screenshot](docs/screenshots/auth/google-provider-setup.jpg)
+![Google OAuth setup dialog — full-size app screenshot](docs/screenshots/auth/google-provider-setup.jpg?v=eea9a82)
 
 #### Request a user account
 
-![Request a user account — full-size app screenshot](docs/screenshots/auth/sign-up-user.jpg)
+![Request a user account — full-size app screenshot](docs/screenshots/auth/sign-up-user.jpg?v=eea9a82)
 
 #### Initial Super Admin setup
 
-![Initial Super Admin setup — full-size app screenshot](docs/screenshots/auth/sign-up-super-admin.jpg)
+![Initial Super Admin setup — full-size app screenshot](docs/screenshots/auth/sign-up-super-admin.jpg?v=eea9a82)
 
 #### Company account creation gate
 
-![Company account creation gate — full-size app screenshot](docs/screenshots/auth/company-account-gate.jpg)
+![Company account creation gate — full-size app screenshot](docs/screenshots/auth/company-account-gate.jpg?v=eea9a82)
 
 #### Password recovery request
 
-![Password recovery request — full-size app screenshot](docs/screenshots/auth/forgot-password.jpg)
+![Password recovery request — full-size app screenshot](docs/screenshots/auth/forgot-password.jpg?v=eea9a82)
 
 #### Reset password form
 
-![Reset password form — full-size app screenshot](docs/screenshots/auth/reset-password.jpg)
+![Reset password form — full-size app screenshot](docs/screenshots/auth/reset-password.jpg?v=eea9a82)
 
 ### Screenshots: guest demo account
 
@@ -138,27 +138,27 @@ The guest account has read-only access to the synthetic demo tenant. It can view
 
 #### Guest demo dashboard
 
-![Guest demo dashboard — full-size app screenshot](docs/screenshots/guest/dashboard.jpg)
+![Guest demo dashboard — full-size app screenshot](docs/screenshots/guest/dashboard.jpg?v=eea9a82)
 
 #### Guest Analytics & Insights
 
-![Guest Analytics & Insights — full-size app screenshot](docs/screenshots/guest/analytics-insights.jpg)
+![Guest Analytics & Insights — full-size app screenshot](docs/screenshots/guest/analytics-insights.jpg?v=eea9a82)
 
 #### Guest Predictive Intelligence
 
-![Guest Predictive Intelligence — full-size app screenshot](docs/screenshots/guest/predictive-intelligence.jpg)
+![Guest Predictive Intelligence — full-size app screenshot](docs/screenshots/guest/predictive-intelligence.jpg?v=eea9a82)
 
 #### Guest Reports & Exports
 
-![Guest Reports & Exports — full-size app screenshot](docs/screenshots/guest/reports-exports.jpg)
+![Guest Reports & Exports — full-size app screenshot](docs/screenshots/guest/reports-exports.jpg?v=eea9a82)
 
 #### Guest A/B Testing
 
-![Guest A/B Testing — full-size app screenshot](docs/screenshots/guest/ab-testing.jpg)
+![Guest A/B Testing — full-size app screenshot](docs/screenshots/guest/ab-testing.jpg?v=eea9a82)
 
 #### Guest access restriction example
 
-![Guest access restriction example — full-size app screenshot](docs/screenshots/guest/campaign-studio-restricted.jpg)
+![Guest access restriction example — full-size app screenshot](docs/screenshots/guest/campaign-studio-restricted.jpg?v=eea9a82)
 
 ### Screenshots: regular Campaign Manager account
 
@@ -167,27 +167,27 @@ This active user account was created and approved inside the temporary documenta
 
 #### Campaign Manager dashboard
 
-![Campaign Manager dashboard — full-size app screenshot](docs/screenshots/campaign-manager/dashboard.jpg)
+![Campaign Manager dashboard — full-size app screenshot](docs/screenshots/campaign-manager/dashboard.jpg?v=eea9a82)
 
 #### Campaign Manager Campaign Studio
 
-![Campaign Manager Campaign Studio — full-size app screenshot](docs/screenshots/campaign-manager/campaign-studio.jpg)
+![Campaign Manager Campaign Studio — full-size app screenshot](docs/screenshots/campaign-manager/campaign-studio.jpg?v=eea9a82)
 
 #### Campaign Manager approvals
 
-![Campaign Manager approvals — full-size app screenshot](docs/screenshots/campaign-manager/approvals.jpg)
+![Campaign Manager approvals — full-size app screenshot](docs/screenshots/campaign-manager/approvals.jpg?v=eea9a82)
 
 #### Campaign Manager reports
 
-![Campaign Manager reports — full-size app screenshot](docs/screenshots/campaign-manager/reports-exports.jpg)
+![Campaign Manager reports — full-size app screenshot](docs/screenshots/campaign-manager/reports-exports.jpg?v=eea9a82)
 
 #### Campaign Manager account-management restriction
 
-![Campaign Manager account-management restriction — full-size app screenshot](docs/screenshots/campaign-manager/user-roles-restricted.jpg)
+![Campaign Manager account-management restriction — full-size app screenshot](docs/screenshots/campaign-manager/user-roles-restricted.jpg?v=eea9a82)
 
 #### Campaign Manager profile
 
-![Campaign Manager profile — full-size app screenshot](docs/screenshots/campaign-manager/profile.jpg)
+![Campaign Manager profile — full-size app screenshot](docs/screenshots/campaign-manager/profile.jpg?v=eea9a82)
 
 ### Screenshots: Super Admin and module workspaces
 
@@ -301,103 +301,103 @@ The browser calls the FastAPI `/api` routes through `frontend/lib/api.ts` using 
 
 ##### Executive Dashboard
 
-![Executive Dashboard — full-size app screenshot](docs/screenshots/super-admin/dashboard.jpg)
+![Executive Dashboard — full-size app screenshot](docs/screenshots/super-admin/dashboard.jpg?v=eea9a82)
 
 ##### Scenario Studio
 
-![Scenario Studio — full-size app screenshot](docs/screenshots/super-admin/scenario-studio.jpg)
+![Scenario Studio — full-size app screenshot](docs/screenshots/super-admin/scenario-studio.jpg?v=eea9a82)
 
 ##### Campaign Studio
 
-![Campaign Studio — full-size app screenshot](docs/screenshots/super-admin/campaign-studio.jpg)
+![Campaign Studio — full-size app screenshot](docs/screenshots/super-admin/campaign-studio.jpg?v=eea9a82)
 
 ##### Campaign Calendar
 
-![Campaign Calendar — full-size app screenshot](docs/screenshots/super-admin/campaign-calendar.jpg)
+![Campaign Calendar — full-size app screenshot](docs/screenshots/super-admin/campaign-calendar.jpg?v=eea9a82)
 
 ##### Customer 360
 
-![Customer 360 — full-size app screenshot](docs/screenshots/super-admin/customer-360.jpg)
+![Customer 360 — full-size app screenshot](docs/screenshots/super-admin/customer-360.jpg?v=eea9a82)
 
 ##### Audience & Segments
 
-![Audience & Segments — full-size app screenshot](docs/screenshots/super-admin/audience-segments.jpg)
+![Audience & Segments — full-size app screenshot](docs/screenshots/super-admin/audience-segments.jpg?v=eea9a82)
 
 ##### AI Segment Builder
 
-![AI Segment Builder — full-size app screenshot](docs/screenshots/super-admin/ai-segment-builder.jpg)
+![AI Segment Builder — full-size app screenshot](docs/screenshots/super-admin/ai-segment-builder.jpg?v=eea9a82)
 
 ##### Offer Management
 
-![Offer Management — full-size app screenshot](docs/screenshots/super-admin/offer-management.jpg)
+![Offer Management — full-size app screenshot](docs/screenshots/super-admin/offer-management.jpg?v=eea9a82)
 
 ##### Journey Orchestration
 
-![Journey Orchestration — full-size app screenshot](docs/screenshots/super-admin/journey-orchestration.jpg)
+![Journey Orchestration — full-size app screenshot](docs/screenshots/super-admin/journey-orchestration.jpg?v=eea9a82)
 
 ##### Workflow Automation
 
-![Workflow Automation — full-size app screenshot](docs/screenshots/super-admin/workflow-automation.jpg)
+![Workflow Automation — full-size app screenshot](docs/screenshots/super-admin/workflow-automation.jpg?v=eea9a82)
 
 ##### Campaign Execution
 
-![Campaign Execution — full-size app screenshot](docs/screenshots/super-admin/campaign-execution.jpg)
+![Campaign Execution — full-size app screenshot](docs/screenshots/super-admin/campaign-execution.jpg?v=eea9a82)
 
 ##### Channel Management
 
-![Channel Management — full-size app screenshot](docs/screenshots/super-admin/channel-management.jpg)
+![Channel Management — full-size app screenshot](docs/screenshots/super-admin/channel-management.jpg?v=eea9a82)
 
 ##### Nova AI Assistant
 
-![Nova AI Assistant — full-size app screenshot](docs/screenshots/super-admin/nova-ai.jpg)
+![Nova AI Assistant — full-size app screenshot](docs/screenshots/super-admin/nova-ai.jpg?v=eea9a82)
 
 ##### Predictive Intelligence
 
-![Predictive Intelligence — full-size app screenshot](docs/screenshots/super-admin/predictive-intelligence.jpg)
+![Predictive Intelligence — full-size app screenshot](docs/screenshots/super-admin/predictive-intelligence.jpg?v=eea9a82)
 
 ##### A/B Testing
 
-![A/B Testing — full-size app screenshot](docs/screenshots/super-admin/ab-testing.jpg)
+![A/B Testing — full-size app screenshot](docs/screenshots/super-admin/ab-testing.jpg?v=eea9a82)
 
 ##### Analytics & Insights
 
-![Analytics & Insights — full-size app screenshot](docs/screenshots/super-admin/analytics-insights.jpg)
+![Analytics & Insights — full-size app screenshot](docs/screenshots/super-admin/analytics-insights.jpg?v=eea9a82)
 
 ##### Reports & Exports
 
-![Reports & Exports — full-size app screenshot](docs/screenshots/super-admin/reports-exports.jpg)
+![Reports & Exports — full-size app screenshot](docs/screenshots/super-admin/reports-exports.jpg?v=eea9a82)
 
 ##### Data Integration Hub
 
-![Data Integration Hub — full-size app screenshot](docs/screenshots/super-admin/integrations.jpg)
+![Data Integration Hub — full-size app screenshot](docs/screenshots/super-admin/integrations.jpg?v=eea9a82)
 
 ##### Business Rules Engine
 
-![Business Rules Engine — full-size app screenshot](docs/screenshots/super-admin/business-rules.jpg)
+![Business Rules Engine — full-size app screenshot](docs/screenshots/super-admin/business-rules.jpg?v=eea9a82)
 
 ##### Approvals & Governance
 
-![Approvals & Governance — full-size app screenshot](docs/screenshots/super-admin/approvals.jpg)
+![Approvals & Governance — full-size app screenshot](docs/screenshots/super-admin/approvals.jpg?v=eea9a82)
 
 ##### Feature Access
 
-![Feature Access — full-size app screenshot](docs/screenshots/super-admin/feature-access.jpg)
+![Feature Access — full-size app screenshot](docs/screenshots/super-admin/feature-access.jpg?v=eea9a82)
 
 ##### User & Role Management
 
-![User & Role Management — full-size app screenshot](docs/screenshots/super-admin/user-roles.jpg)
+![User & Role Management — full-size app screenshot](docs/screenshots/super-admin/user-roles.jpg?v=eea9a82)
 
 ##### Audit Logs
 
-![Audit Logs — full-size app screenshot](docs/screenshots/super-admin/audit-logs.jpg)
+![Audit Logs — full-size app screenshot](docs/screenshots/super-admin/audit-logs.jpg?v=eea9a82)
 
 ##### System Configuration
 
-![System Configuration — full-size app screenshot](docs/screenshots/super-admin/settings.jpg)
+![System Configuration — full-size app screenshot](docs/screenshots/super-admin/settings.jpg?v=eea9a82)
 
 ##### Super Admin profile
 
-![Super Admin profile — full-size app screenshot](docs/screenshots/super-admin/profile.jpg)
+![Super Admin profile — full-size app screenshot](docs/screenshots/super-admin/profile.jpg?v=eea9a82)
 Authentication pages are `frontend/app/login/page.tsx`, `signup/page.tsx`, `forgot-password/page.tsx`, and `reset-password/page.tsx`. Dynamic module paths resolve through `frontend/app/[...slug]/page.tsx`.
 
 ## Backend API guide
