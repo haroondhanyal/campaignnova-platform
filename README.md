@@ -191,7 +191,7 @@ This active user account was created and approved inside the temporary documenta
 
 ### Screenshots: Super Admin and module workspaces
 
-The documentation Super Admin has every module enabled in the temporary workspace. Each screen below is embedded separately at its original 1440 × 1100 capture resolution, with its module name above it. These captures use synthetic sample data and do not imply that external delivery or OAuth providers are connected.
+The documentation Super Admin has every module enabled in the temporary workspace. Each screen below is embedded separately as a full-width, high-quality capture with the complete side navigation visible and its module name above it. These captures use synthetic sample data and do not imply that external delivery or OAuth providers are connected.
 
 ## Architecture
 
