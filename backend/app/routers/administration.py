@@ -1,6 +1,6 @@
 """Administrator-only account directory and workspace configuration."""
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -66,10 +66,6 @@ class UserCreate(BaseModel):
     def role_matches_department(self):
         if not auth.valid_role_department(self.role, self.department):
             raise ValueError("This role is not available in the selected department")
-        if self.module_access is not None and self.role not in auth.ADMIN_ROLES:
-            allowed = auth._department_enabled_modules(self.department)
-            if not set(self.module_access).issubset(allowed & set(auth._enabled_modules())):
-                raise ValueError("Module access must fit the selected department")
         return self
 
 
@@ -104,14 +100,45 @@ class UserUpdate(BaseModel):
     def role_matches_department(self):
         if self.role and self.department and not auth.valid_role_department(self.role, self.department):
             raise ValueError("This role is not available in the selected department")
-        if self.module_access is not None:
-            role = self.role
-            department = self.department
-            if role and role not in auth.ADMIN_ROLES and department and not set(self.module_access).issubset(
-                auth._department_enabled_modules(department) & set(auth._enabled_modules())
-            ):
-                raise ValueError("Module access must fit the selected department")
         return self
+
+
+class CompanyCreate(BaseModel):
+    company_name: str = Field(min_length=2, max_length=120)
+    super_admin_name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=254)
+    phone_country_code: str = Field(pattern=r"^\+[1-9]\d{0,3}$")
+    phone_number: str = Field(min_length=7, max_length=18)
+    temporary_password: str
+    logo_data: str = Field(min_length=30)
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value: str) -> str:
+        value = value.strip().casefold()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("Enter a valid company email")
+        return value
+
+    @field_validator("temporary_password")
+    @classmethod
+    def strong_password(cls, value: str) -> str:
+        return auth._validate_password(value)
+
+    @field_validator("logo_data")
+    @classmethod
+    def valid_logo(cls, value: str) -> str:
+        image = auth._validate_avatar(value)
+        if not image:
+            raise ValueError("Upload the company logo to create a branded workspace")
+        if len(image.split(",", 1)[1]) * 3 // 4 > 2 * 1024 * 1024:
+            raise ValueError("Company logo must be 2 MB or smaller")
+        return image
+
+    @field_validator("company_name", "super_admin_name")
+    @classmethod
+    def clean_names(cls, value: str) -> str:
+        return value.strip()
 
 
 class WorkspaceSettings(BaseModel):
@@ -146,7 +173,7 @@ class WorkspaceSettings(BaseModel):
             raise ValueError("Choose valid, unique workspace modules")
         if not {"settings", "user-roles", "feature-access"}.issubset(value):
             raise ValueError("System settings, user administration, and feature requests must remain enabled")
-        return value
+        return list(dict.fromkeys(["dashboard", *value]))
 
     @field_validator("department_module_access")
     @classmethod
@@ -189,8 +216,87 @@ def list_users(_: dict = Depends(auth.require_admin)):
     return {"enforcement": "enabled", "users": [auth.public_user(user) for user in _users()]}
 
 
+@router.get("/overview")
+def super_admin_overview(_: dict = Depends(auth.require_super_admin)):
+    users = _users()
+    now = datetime.now(timezone.utc)
+    recent_cutoff = now - timedelta(minutes=5)
+    online: dict[str, str] = {}
+    last_seen_by_user: dict[str, str] = {}
+    user_ids = {user["id"] for user in users}
+    active_user_ids = {user["id"] for user in users if user.get("status") == "Active"}
+    for session in database.list_records("auth_sessions"):
+        user_id = session.get("user_id")
+        last_seen = session.get("last_seen_at")
+        if user_id not in user_ids or session.get("revoked") or not last_seen:
+            continue
+        try:
+            seen_at = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+            expires_at = datetime.fromisoformat(session["expires_at"].replace("Z", "+00:00"))
+        except (KeyError, TypeError, ValueError):
+            continue
+        seen_text = seen_at.isoformat()
+        previous_seen = last_seen_by_user.get(user_id)
+        if not previous_seen or seen_text > previous_seen:
+            last_seen_by_user[user_id] = seen_text
+        if user_id in active_user_ids and seen_at >= recent_cutoff and expires_at > now:
+            online[user_id] = last_seen_by_user[user_id]
+    return {
+        "total_users": len(users),
+        "active_users": sum(user.get("status") == "Active" for user in users),
+        "inactive_users": sum(user.get("status") == "Disabled" for user in users),
+        "pending_users": sum(user.get("status") == "Pending Approval" for user in users),
+        "online_users": len(online),
+        "online_window_minutes": 5,
+        "users": [{**auth.public_user(user), "online": user["id"] in online,
+                   "last_seen_at": last_seen_by_user.get(user["id"])} for user in users],
+    }
+
+
+@router.post("/companies", status_code=201)
+def create_company(payload: CompanyCreate, current: dict = Depends(auth.require_super_admin)):
+    slug = re.sub(r"[^a-z0-9]+", "-", payload.company_name.casefold()).strip("-")[:70].strip("-")
+    if len(slug) < 2 or slug == "campaignnova-demo":
+        raise HTTPException(status_code=422, detail="Enter a company name that can identify its workspace")
+    if database.global_record("workspace_tenants", slug):
+        raise HTTPException(status_code=409, detail="A company workspace already uses this name or workspace code")
+    try:
+        auth._validate_phone_number(payload.phone_number, payload.phone_country_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    now = datetime.now(timezone.utc).isoformat()
+    tenant = {"id": slug, "slug": slug, "name": payload.company_name,
+              "created_at": now, "created_by": current["id"], "tenant_id": "__global__"}
+    database.save_record("workspace_tenants", slug, tenant)
+    enabled_modules = list(auth.DEFAULT_ENABLED_MODULES)
+    database.save_record("workspace_settings", "workspace-defaults", {
+        **DEFAULT_SETTINGS, "id": "workspace-defaults", "workspace_name": payload.company_name,
+        "enabled_modules": enabled_modules, "department_module_access": {},
+        "logo_data": payload.logo_data, "updated_at": now, "tenant_id": slug,
+    })
+    super_admin = {
+        "id": f"usr-{uuid4().hex[:12]}", "account_type": "user", "display_name": payload.super_admin_name,
+        "tenant_id": slug, "organization_name": payload.company_name, "organization_slug": slug,
+        "email": payload.email, "phone_country_code": payload.phone_country_code,
+        "phone_number": payload.phone_number, "department": "Administration", "role": "Super Admin",
+        "status": "Active", "must_change_password": True, "module_access": None,
+        "avatar_data": None, "avatar_mime": None,
+        "password_hash": auth._password_hash(payload.temporary_password), "created_at": now, "updated_at": now,
+    }
+    database.save_record("workspace_users", super_admin["id"], super_admin)
+    record_audit_event(current["email"], "super_admin_created_company_workspace", "workspace", slug,
+                       {"company_name": payload.company_name, "first_super_admin": payload.email})
+    return {"workspace": {"name": tenant["name"], "slug": slug,
+                           "logo_url": f"/api/auth/workspaces/{slug}/logo" if payload.logo_data else auth.COMPANY_LOGOS.get(slug)},
+            "super_admin": auth.public_user(super_admin)}
+
+
 @router.post("/users", status_code=201)
 def create_user(payload: UserCreate, current: dict = Depends(auth.require_admin)):
+    if payload.module_access is not None and current.get("role") != "Super Admin":
+        raise HTTPException(status_code=403, detail="Only a Super Admin can set account-level module access")
+    if payload.module_access is not None and not set(payload.module_access).issubset(auth._enabled_modules()):
+        raise HTTPException(status_code=422, detail="Account access can only include company-enabled modules")
     if auth._find_email(payload.email):
         raise HTTPException(status_code=409, detail="A workspace account already uses this email")
     if payload.role == "Super Admin" and current.get("role") != "Super Admin":
@@ -221,15 +327,15 @@ def update_user(user_id: str, payload: UserUpdate, current: dict = Depends(auth.
     if not user:
         raise HTTPException(status_code=404, detail="Account not found")
     changes = payload.model_dump(exclude_unset=True)
+    if "module_access" in changes:
+        if current.get("role") != "Super Admin":
+            raise HTTPException(status_code=403, detail="Only a Super Admin can change account-level module access")
+        if changes["module_access"] is not None and not set(changes["module_access"]).issubset(auth._enabled_modules()):
+            raise HTTPException(status_code=422, detail="Account access can only include company-enabled modules")
+        if user["id"] == current["id"] and user.get("role") == "Super Admin" and changes["module_access"] is not None and not {"settings", "user-roles"}.issubset(changes["module_access"]):
+            raise HTTPException(status_code=422, detail="Keep Settings and User & Role Management on your own Super Admin account so you can recover workspace access")
     if not auth.valid_role_department(changes.get("role", user["role"]), changes.get("department", user["department"])):
         raise HTTPException(status_code=422, detail="This role is not available in the selected department")
-    if "module_access" in changes and changes["module_access"] is not None:
-        role = changes.get("role", user["role"])
-        department = changes.get("department", user["department"])
-        if role not in auth.ADMIN_ROLES and not set(changes["module_access"]).issubset(
-            auth._department_enabled_modules(department) & set(auth._enabled_modules())
-        ):
-            raise HTTPException(status_code=422, detail="Module access must fit the selected department")
     if user["id"] == current["id"] and changes.get("status") == "Disabled":
         raise HTTPException(status_code=400, detail="You cannot disable your own active session")
     if changes.get("role") == "Super Admin" and current.get("role") != "Super Admin":
@@ -243,7 +349,8 @@ def update_user(user_id: str, payload: UserUpdate, current: dict = Depends(auth.
     user["updated_at"] = datetime.now(timezone.utc).isoformat()
     auth._save_user(user)
     record_audit_event(current["email"], "administrator_updated_account", "user", user_id,
-                       {key: user[key] for key in ("role", "department", "status")})
+                       {**{key: user[key] for key in ("role", "department", "status")},
+                        **({"module_access": user.get("module_access")} if "module_access" in changes else {})})
     return auth.public_user(user)
 
 
@@ -256,7 +363,7 @@ def get_settings():
                 "enabled_modules": auth._enabled_modules(), "department_module_access": {}, "logo_data": None}
     saved = dict(saved or {})
     slug = (tenant or {}).get("slug", "")
-    return {**defaults, **saved,
+    return {**defaults, **saved, "enabled_modules": auth._enabled_modules(),
             "organization_slug": slug,
             "organization_logo_url": f"/api/auth/workspaces/{slug}/logo" if saved.get("logo_data") else None,
             "runtime": {"database": "SQLite development store", "gemini_configured": gemini.configured(),
@@ -267,7 +374,7 @@ def get_settings():
 def save_settings(payload: WorkspaceSettings, current: dict = Depends(auth.require_admin)):
     previous = auth._workspace_settings()
     submitted = payload.model_dump()
-    enabled = set(submitted["enabled_modules"])
+    enabled = set(submitted["enabled_modules"]) | {"dashboard"}
     submitted["department_module_access"] = {
         department: [module for module in modules if module in enabled]
         for department, modules in submitted["department_module_access"].items()

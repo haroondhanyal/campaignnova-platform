@@ -10,6 +10,7 @@ TABLES = (
     "campaigns", "customers", "segments", "offers", "scenarios", "scenario_runs",
     "journeys", "business_rules", "execution_runs", "approvals", "audit_events", "integrations",
     "workspace_users", "workspace_settings", "auth_sessions", "password_resets", "feature_requests",
+    "campaign_audiences", "oauth_identities",
 )
 GLOBAL_TABLES = ("workspace_tenants",)
 _TENANT_ID: ContextVar[str] = ContextVar("campaignnova_tenant_id", default="campaignnova-demo")

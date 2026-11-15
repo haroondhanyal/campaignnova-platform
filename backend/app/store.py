@@ -43,6 +43,8 @@ def initialize() -> None:
     database.initialize({"campaigns": campaigns, "customers": customers, "segments": segments, "offers": offers,
                          "scenarios": scenarios, "scenario_runs": [], "journeys": [], "business_rules": [],
                          "execution_runs": [], "approvals": [], "audit_events": [], "integrations": [],
+                         "campaign_audiences": [],
+                         "oauth_identities": [],
                          "workspace_users": [], "workspace_settings": [],
                          "auth_sessions": [], "password_resets": [], "feature_requests": []})
     database.save_record("workspace_tenants", "campaignnova-demo", {

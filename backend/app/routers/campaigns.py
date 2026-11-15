@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from .. import store
+from .. import database, store
 from ..schemas import Campaign, CampaignCreate, CampaignPatch, CampaignStatus, CampaignTransition
 from ..services.segmentation import segment_members
 from .authentication import require_user
@@ -36,16 +36,28 @@ def add_campaign(payload: CampaignCreate, current: dict = Depends(require_user))
 
 def validate_campaign(payload: CampaignCreate):
     checks = []
-    segment = next((s for s in store.get_segments() if s.id == payload.segment_id), None) if payload.segment_id else None
-    if payload.segment_id and segment is None:
+    eligible = []
+    imported = next((row for row in database.list_records("campaign_audiences")
+                     if row.get("id") == payload.imported_audience_id), None) if payload.imported_audience_id else None
+    if payload.imported_audience_id and imported is None:
+        checks.append({"key": "audience", "status": "error", "message": "Imported audience was not found; upload the file again"})
+    elif imported:
+        eligible_imported = int(imported.get("consented_count", 0))
+        checks.append({"key": "audience", "status": "passed" if eligible_imported else "error",
+                       "message": f"{eligible_imported} consented contacts in imported list" if eligible_imported else "No consented contacts in imported list"})
+        checks.append({"key": "consent", "status": "passed" if eligible_imported else "error",
+                       "message": f"{imported.get('excluded_no_consent', 0)} contacts excluded without consent" if eligible_imported else "At least one contact must have marketing consent"})
+    segment = next((s for s in store.get_segments() if s.id == payload.segment_id), None) if payload.segment_id and not payload.imported_audience_id else None
+    if payload.segment_id and not payload.imported_audience_id and segment is None:
         checks.append({"key": "audience", "status": "error", "message": "Selected audience segment was not found"})
         eligible = []
-    else:
+    elif not payload.imported_audience_id:
         audience = segment_members(segment, store.get_customers()) if segment else list(store.get_customers())
         eligible = [c for c in audience if c.consent]
         checks.append({"key": "audience", "status": "passed", "message": f"{len(audience)} synthetic sample customers in audience"})
-    checks.append({"key": "consent", "status": "passed" if eligible else "warning",
-                   "message": f"{len(eligible)} sample customers are opted in" if eligible else "No opted-in customers in the local sample"})
+    if not payload.imported_audience_id:
+        checks.append({"key": "consent", "status": "passed" if eligible else "warning",
+                       "message": f"{len(eligible)} sample customers are opted in" if eligible else "No opted-in customers in the local sample"})
     if payload.offer_id:
         offer = next((o for o in store.get_offers() if o.id == payload.offer_id), None)
         if offer is None:
@@ -61,7 +73,7 @@ def validate_campaign(payload: CampaignCreate):
     checks.append({"key": "budget", "status": "warning" if payload.budget == 0 else "passed",
                    "message": "Budget is zero; confirm this is intentional" if payload.budget == 0 else f"Budget set to PKR {payload.budget:,.0f}"})
     return {"can_create": not any(check["status"] == "error" for check in checks), "checks": checks,
-            "estimate_basis": "synthetic_sample"}
+            "estimate_basis": "masked_imported_audience" if imported else "synthetic_sample"}
 
 
 @router.post("/validate")

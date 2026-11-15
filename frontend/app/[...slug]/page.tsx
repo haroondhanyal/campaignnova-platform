@@ -45,7 +45,7 @@ const moduleText:Record<string,{action:string;description:string;intro?:string}>
   integrations:{action:'Connector catalog',description:'Review available connector requirements. No external systems are configured.'},
   'business-rules':{action:'Create rule',description:'Configure eligibility, frequency caps and quiet-hour suppression.'},
   approvals:{action:'Review queue',description:'Review campaign, offer and scenario requests with an auditable decision trail.'},
-  'user-roles':{action:'Manage directory',description:'Maintain a local role catalog and directory plan. API authorization is not enabled.'},
+  'user-roles':{action:'Manage directory',description:'Manage workspace accounts, roles, account status, and Super Admin-controlled module access.'},
   'audit-logs':{action:'Export logs',description:'Approval requests and decisions are retained in the local SQLite audit trail.'},
   settings:{action:'Save preferences',description:'Set workspace preferences and inspect development connection status.'},
 };

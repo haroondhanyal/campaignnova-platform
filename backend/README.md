@@ -14,7 +14,7 @@ uvicorn app.main:app --reload --port 8000
 
 Open `http://localhost:8000/docs` for interactive API documentation. Set `NEXT_PUBLIC_API_URL=http://localhost:8000/api` in the frontend environment.
 
-Open `http://localhost:3000/signup` to bootstrap the first Super Admin account. Later signups require administrator approval. See [`docs/AUTHENTICATION.md`](../docs/AUTHENTICATION.md) for role scopes, profile photos, and SMTP reset delivery.
+Open `http://localhost:3000/signup` and choose **Super Admin** to initialize an existing workspace that has no accounts. Later User signups require administrator approval. A signed-in Super Admin creates new company workspaces and their first administrator in `/user-roles`. See [`docs/AUTHENTICATION.md`](../docs/AUTHENTICATION.md) for the full flow.
 
 Set `CAMPAIGNNOVA_DB_PATH` to change the SQLite database file. Docker Compose mounts `backend/data/` so records persist across container restarts.
 
@@ -48,6 +48,6 @@ Routes are grouped under `app/routers/` and mounted below `/api`.
 | `experiments.py` | `GET/POST /api/experiments`, `GET/PUT/DELETE /api/experiments/{id}`, `POST /api/experiments/{id}/preview`; preview only, no measured outcomes |
 | `workspaces.py` | `GET /api/modules`, `GET /api/modules/{module_key}`, `POST /api/modules/{module_key}/actions` |
 
-Every navigation module has a workspace key. Authentication routes and system health are public; domain and administration routes require a valid account session. Department and read-only role scopes are enforced by the API. The first local signup creates the Super Admin; later public signups wait for approval. Execution endpoints persist deterministic local simulations only. Configure SMTP for reset emails; otherwise only development mode shows a reset link.
+Every navigation module has a workspace key. Authentication routes and system health are public; domain and administration routes require a valid account session. Department and read-only role scopes are enforced by the API. Initial Super Admin setup is limited to an unclaimed existing workspace; later User signups wait for approval, and new companies are created by a signed-in Super Admin. Execution endpoints persist deterministic local simulations only. Configure SMTP for reset emails; otherwise only development mode shows a reset link.
 
 Campaign filters: optional `status` and `q`. Customer filters: optional `q` and `segment`. Segment filter: optional `q`.

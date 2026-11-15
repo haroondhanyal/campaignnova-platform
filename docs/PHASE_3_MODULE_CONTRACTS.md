@@ -16,7 +16,9 @@ Phase 3 adds API-backed orchestration, local execution simulation, business rule
 
 ## Campaign Execution
 
-- API: `GET/POST /api/execution/runs`, `GET /api/execution/runs/{id}`, and per-run `pause`, `resume`, and `retry` actions.
+- API: `POST /api/execution/audiences/import`, `GET/POST /api/execution/runs`, `GET /api/execution/runs/{id}`, and per-run `pause`, `resume`, and `retry` actions.
+- Campaign Studio accepts `.xlsx` and UTF-8 `.csv` contact lists with a `phone_number` column and optional consent column. It validates and normalizes phone values, deduplicates them, excludes explicit non-consent, and requires the operator to affirm consent when importing. Stored audience data contains masked identifiers only; raw numbers are discarded after parsing.
+- Imported-list campaigns require a message template. The template is previewed in the run record, while imported audiences use consent-only checks because the local app has no matching customer profiles for evaluating profile-based business rules.
 - Runs require an approved or scheduled campaign, use an idempotency key, enforce batch/rate limits, and persist customer-level attempts.
 - Outcomes are deterministic local adapter results labeled `SIMULATION`; no SMS, WhatsApp, push, email, or other provider is called.
 

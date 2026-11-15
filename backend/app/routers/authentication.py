@@ -11,10 +11,12 @@ import time
 from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 from typing import Literal
+from urllib.parse import parse_qsl, urlsplit
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import Response as RawResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from .. import database
@@ -78,6 +80,7 @@ DEPARTMENT_MODULES = {
     "Human Resources": set(),
 }
 MODULE_TITLES = {
+    "dashboard": "Executive Dashboard",
     "scenario-studio": "Scenario Studio", "campaign-studio": "Campaign Studio",
     "campaign-calendar": "Campaign Calendar", "customer-360": "Customer 360",
     "audience-segments": "Audience & Segments", "ai-segment-builder": "AI Segment Builder",
@@ -91,7 +94,15 @@ MODULE_TITLES = {
     "audit-logs": "Audit Logs", "settings": "System Configuration", "feature-access": "Feature Access",
 }
 MODULE_KEYS = tuple(MODULE_TITLES)
-DEFAULT_ENABLED_MODULES = ["campaign-studio", "campaign-calendar", "customer-360", "audience-segments", "offer-management", "analytics-insights", "reports-exports", "approvals", "user-roles", "settings", "feature-access"]
+DEFAULT_ENABLED_MODULES = ["dashboard", "campaign-studio", "campaign-calendar", "customer-360", "audience-segments", "offer-management", "campaign-execution", "analytics-insights", "reports-exports", "approvals", "user-roles", "settings", "feature-access"]
+COMPANY_LOGOS = {
+    "ptcl": "/company-logos/ptcl.svg", "jazz": "/company-logos/jazz.png",
+    "zong": "/company-logos/zong.svg", "ufone": "/company-logos/ufone.png",
+    "telenor": "/company-logos/telenor.png", "nayatel": "/company-logos/nayatel.jpg",
+    "stormfiber": "/company-logos/stormfiber.svg", "transworld": "/company-logos/transworld.svg",
+    "wateen": "/company-logos/wateen.png", "cybernet": "/company-logos/cybernet.svg",
+    "fiberlink": "/company-logos/fiberlink.jpg",
+}
 PHONE_LENGTHS = {
     "+1": (10, 10), "+44": (10, 10), "+971": (9, 9), "+91": (10, 10),
     "+966": (9, 9), "+974": (8, 8), "+86": (11, 11), "+90": (10, 10),
@@ -112,6 +123,13 @@ API_MODULE_ALIASES = {
     "audience-segments": {"audience-segments", "ai-segment-builder"},
     "integrations": {"integrations", "channel-management"},
 }
+OAUTH_PROVIDER_INFO = {
+    "google": {"name": "Google", "discovery": "https://accounts.google.com/.well-known/openid-configuration", "prefix": "GOOGLE"},
+    "microsoft": {"name": "Microsoft", "discovery": "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration", "prefix": "MICROSOFT"},
+    "yahoo": {"name": "Yahoo", "discovery": "https://api.login.yahoo.com/.well-known/openid-configuration", "prefix": "YAHOO"},
+    "apple": {"name": "Apple", "discovery": "https://appleid.apple.com/.well-known/openid-configuration", "prefix": "APPLE"},
+}
+OAUTH_CLIENTS = None
 
 
 def _now() -> datetime:
@@ -126,7 +144,7 @@ def _workspace_settings(tenant_id: str | None = None) -> dict:
 def _enabled_modules(tenant_id: str | None = None) -> list[str]:
     configured = _workspace_settings(tenant_id).get("enabled_modules")
     if isinstance(configured, list):
-        return [key for key in MODULE_KEYS if key in configured]
+        return [key for key in MODULE_KEYS if key == "dashboard" or key in configured]
     tenant = next((row for row in database.list_records("workspace_tenants", tenant_id="*") if row.get("id") == (tenant_id or database.current_tenant())), None)
     return list(MODULE_KEYS) if not tenant or tenant.get("slug") == "campaignnova-demo" else list(DEFAULT_ENABLED_MODULES)
 
@@ -169,6 +187,8 @@ def public_user(user: dict) -> dict:
     public["department_modules"] = sorted(_department_enabled_modules(user.get("department", ""), tenant_id))
     if tenant_settings.get("logo_data"):
         public["organization_logo_url"] = f"/api/auth/workspaces/{public['organization_slug']}/logo"
+    elif tenant:
+        public["organization_logo_url"] = tenant.get("logo_url") or COMPANY_LOGOS.get(tenant.get("slug", ""))
     if user.get("avatar_data"):
         public["avatar_url"] = f"/api/auth/users/{user['id']}/avatar"
     return public
@@ -263,11 +283,14 @@ def _new_session(response: Response, user: dict, remember_me: bool = False) -> N
     secure = (os.getenv("CAMPAIGNNOVA_SECURE_COOKIES", "false").casefold() == "true"
               or os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production")
     response.set_cookie(SESSION_COOKIE, token, max_age=max_age, httponly=True,
-                        secure=secure, samesite="lax", path="/")
+                        secure=secure, samesite="none" if secure else "lax", path="/")
 
 
 def _clear_session(response: Response) -> None:
-    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
+    secure = (os.getenv("CAMPAIGNNOVA_SECURE_COOKIES", "false").casefold() == "true"
+              or os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production")
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True,
+                           secure=secure, samesite="none" if secure else "lax")
 
 
 def _send_reset_email(recipient: str, reset_url: str) -> bool:
@@ -313,25 +336,31 @@ def _request_user(request: Request) -> dict:
     user = next((row for row in _accounts() if row.get("id") == session.get("user_id")), None)
     if not user or user.get("status") != "Active":
         raise HTTPException(status_code=401, detail="This account is not active")
+    now = _now()
+    last_seen = session.get("last_seen_at")
+    if not last_seen or (now - _utc(last_seen)).total_seconds() >= 60:
+        database.save_record("auth_sessions", session["id"], {**session, "last_seen_at": now.isoformat()})
     return user
 
 
 def _user_can_access_module(user: dict, module: str) -> bool:
     if module not in MODULE_TITLES:
         return False
-    if user.get("role") in ADMIN_ROLES and module in {"settings", "user-roles"}:
-        return True
     enabled = _enabled_modules(user.get("tenant_id"))
     if module not in enabled:
         return False
+    assigned_modules = user.get("module_access")
+    # An explicit account policy can narrow even an administrator's workspace
+    # modules. `None` keeps the normal role defaults.
     if user.get("role") in ADMIN_ROLES:
+        return not isinstance(assigned_modules, list) or module in assigned_modules
+    if isinstance(assigned_modules, list):
+        return module in assigned_modules
+    if module == "dashboard":
         return True
     if module == "feature-access":
         return True
     department_modules = _department_enabled_modules(user.get("department", ""), user.get("tenant_id"))
-    assigned_modules = user.get("module_access")
-    if isinstance(assigned_modules, list):
-        department_modules = department_modules.intersection(assigned_modules)
     return module in department_modules
 
 
@@ -378,14 +407,14 @@ def require_user(request: Request) -> dict:
     module = next((key for prefix, key in ROUTE_MODULES if path == prefix or path.startswith(prefix + "/")), None)
     if path.startswith("/admin/settings"):
         module = "settings"
-    elif path.startswith("/admin/users") or path.startswith("/admin/roles"):
+    elif path.startswith(("/admin/users", "/admin/roles", "/admin/overview", "/admin/companies")):
         module = "user-roles"
     module_match = re.match(r"^/modules/([^/]+)", path)
     if module_match:
         module = module_match.group(1)
     if path.startswith("/feature-access"):
         module = "feature-access"
-    if module and module != "dashboard" and not _user_can_access_api_module(user, module, path, method):
+    if module and not _user_can_access_api_module(user, module, path, method):
         raise HTTPException(status_code=403, detail="This module is not enabled for your account")
     return user
 
@@ -393,6 +422,12 @@ def require_user(request: Request) -> dict:
 def require_admin(user: dict = Depends(require_user)) -> dict:
     if user.get("role") not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Administrator access is required")
+    return user
+
+
+def require_super_admin(user: dict = Depends(require_user)) -> dict:
+    if user.get("role") != "Super Admin":
+        raise HTTPException(status_code=403, detail="Super Admin access is required")
     return user
 
 
@@ -405,7 +440,9 @@ def require_settings_admin(user: dict = Depends(require_user)) -> dict:
 
 
 class Signup(BaseModel):
-    company_name: str = Field(min_length=2, max_length=120)
+    workspace_slug: str | None = Field(default=None, min_length=2, max_length=80)
+    signup_type: Literal["user", "super_admin", "company"] = "user"
+    company_name: str | None = Field(default=None, min_length=2, max_length=120)
     display_name: str = Field(min_length=2, max_length=120)
     email: str = Field(min_length=5, max_length=254)
     password: str
@@ -460,8 +497,8 @@ class Signup(BaseModel):
 
     @field_validator("company_name")
     @classmethod
-    def clean_company_name(cls, value: str) -> str:
-        return value.strip()
+    def clean_company_name(cls, value: str | None) -> str | None:
+        return value.strip() if value else value
 
 
 class Login(BaseModel):
@@ -531,11 +568,28 @@ def workspace_brand(workspace_slug: str):
     tenant = database.global_record("workspace_tenants", workspace_slug.strip().casefold())
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    logo_url = None
     settings = _workspace_settings(tenant["id"])
-    if settings.get("logo_data"):
-        logo_url = f"/api/auth/workspaces/{tenant['slug']}/logo"
+    logo_url = (f"/api/auth/workspaces/{tenant['slug']}/logo" if settings.get("logo_data")
+                else tenant.get("logo_url") or COMPANY_LOGOS.get(tenant.get("slug", "")))
     return {"name": tenant["name"], "slug": tenant["slug"], "logo_url": logo_url}
+
+
+@router.get("/workspaces")
+def list_workspaces():
+    rows = [row for row in database.list_records("workspace_tenants", tenant_id="*")
+            if row.get("slug") != "campaignnova-demo"]
+    workspaces = []
+    for tenant in rows:
+        settings = _workspace_settings(tenant["id"])
+        logo_url = (f"/api/auth/workspaces/{tenant['slug']}/logo" if settings.get("logo_data")
+                    else tenant.get("logo_url") or COMPANY_LOGOS.get(tenant.get("slug", "")))
+        accounts = [row for row in database.list_records("workspace_users", tenant_id=tenant["id"])
+                    if row.get("account_type") == "user"]
+        has_active_admin = any(row.get("status") == "Active" and row.get("role") in ADMIN_ROLES for row in accounts)
+        workspaces.append({"name": tenant["name"], "slug": tenant["slug"], "logo_url": logo_url,
+                           "user_signup_available": has_active_admin,
+                           "super_admin_setup_available": not accounts})
+    return sorted(workspaces, key=lambda row: row["name"].casefold())
 
 
 @router.get("/workspaces/{workspace_slug}/logo")
@@ -554,48 +608,50 @@ def workspace_logo(workspace_slug: str):
 
 @router.post("/signup", status_code=201)
 def signup(payload: Signup, response: Response):
-    slug = re.sub(r"[^a-z0-9]+", "-", payload.company_name.casefold()).strip("-")[:70].strip("-")
-    if len(slug) < 2:
-        raise HTTPException(status_code=422, detail="Enter a company name that can identify its workspace")
-    tenant = next((row for row in database.list_records("workspace_tenants", tenant_id="*")
-                   if row.get("slug") == slug), None)
-    if slug == "campaignnova-demo":
-        raise HTTPException(status_code=409, detail="This workspace code is reserved")
-    if tenant is None:
-        tenant = {"id": slug, "slug": slug, "name": payload.company_name, "created_at": _now().isoformat(), "tenant_id": "__global__"}
-        database.save_record("workspace_tenants", slug, tenant)
+    if payload.signup_type == "company":
+        raise HTTPException(status_code=403, detail="Only a signed-in Super Admin can create a company workspace")
+    slug = (payload.workspace_slug or "").strip().casefold()
+    tenant = database.global_record("workspace_tenants", slug)
+    if not tenant or tenant.get("slug") == "campaignnova-demo":
+        raise HTTPException(status_code=404, detail="Choose a company workspace from the list")
     database.set_tenant(tenant["id"])
     if _find_email(payload.email):
         raise HTTPException(status_code=409, detail="An account already uses this email")
     first_account = len(_accounts()) == 0
-    if first_account and os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production":
+    if payload.signup_type == "user" and first_account:
+        raise HTTPException(status_code=409, detail="This company needs its initial Super Admin setup before users can join")
+    if payload.signup_type == "super_admin" and not first_account:
+        raise HTTPException(status_code=409, detail="This company already has an administrator. Request a user account instead.")
+    if payload.signup_type == "super_admin" and os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production":
         bootstrap = os.getenv("CAMPAIGNNOVA_BOOTSTRAP_TOKEN", "")
         if not bootstrap or not hmac.compare_digest(payload.bootstrap_token, bootstrap):
             raise HTTPException(status_code=403, detail="Initial account setup requires the configured administrator bootstrap token")
+    is_super_admin = payload.signup_type == "super_admin"
     now = _now().isoformat()
     user = {
         "id": f"usr-{uuid4().hex[:12]}", "account_type": "user", "display_name": payload.display_name,
         "tenant_id": tenant["id"], "organization_name": tenant["name"], "organization_slug": tenant["slug"],
         "email": payload.email, "phone_country_code": payload.phone_country_code,
-        "phone_number": payload.phone_number, "department": "Administration" if first_account else payload.department,
-        "role": "Super Admin" if first_account else "Viewer",
-        "status": "Active" if first_account else "Pending Approval", "must_change_password": False,
+        "phone_number": payload.phone_number, "department": "Administration" if is_super_admin else payload.department,
+        "role": "Super Admin" if is_super_admin else "Viewer",
+        "status": "Active" if is_super_admin else "Pending Approval", "must_change_password": False,
         "avatar_data": payload.avatar_data, "avatar_mime": payload.avatar_data.split(";", 1)[0][5:] if payload.avatar_data else None,
         "password_hash": _password_hash(payload.password), "created_at": now, "updated_at": now,
     }
     _save_user(user)
-    if first_account:
+    if is_super_admin and first_account:
         database.save_record("workspace_settings", "workspace-defaults", {
             "id": "workspace-defaults", "workspace_name": tenant["name"], "enabled_modules": list(DEFAULT_ENABLED_MODULES),
             "department_module_access": {}, "logo_data": None, "timezone": "UTC", "currency": "USD",
-            "date_format": "YYYY-MM-DD", "default_channel": "SMS",
+            "date_format": "YYYY-MM-DD", "default_channel": "SMS", "tenant_id": tenant["id"],
         })
     record_audit_event(user["email"], "account_created", "user", user["id"],
                        {"department": user["department"], "role": user["role"], "status": user["status"]})
-    if first_account:
+    if is_super_admin:
         _new_session(response, user)
-    return {"user": public_user(user), "first_account": first_account, "workspace_slug": tenant["slug"],
-            "message": "Initial administrator account created." if first_account else "Signup received. An administrator must approve the account before sign-in."}
+    return {"user": public_user(user), "first_account": first_account, "super_admin_created": is_super_admin,
+            "workspace_slug": tenant["slug"],
+            "message": "Super Admin account created." if is_super_admin else "Signup received. A company Super Admin must approve the account before sign-in."}
 
 
 @router.post("/login")
@@ -624,6 +680,214 @@ def login(payload: Login, request: Request, response: Response):
     return {"user": public_user(user)}
 
 
+def _oauth_is_configured(provider: str) -> bool:
+    info = OAUTH_PROVIDER_INFO.get(provider)
+    if not info or not os.getenv("CAMPAIGNNOVA_OAUTH_SESSION_SECRET"):
+        return False
+    prefix = info["prefix"]
+    configured = bool(os.getenv(f"CAMPAIGNNOVA_OAUTH_{prefix}_CLIENT_ID")
+                      and os.getenv(f"CAMPAIGNNOVA_OAUTH_{prefix}_CLIENT_SECRET"))
+    if provider == "apple":
+        api_url = os.getenv("CAMPAIGNNOVA_PUBLIC_API_URL", "http://localhost:8000").rstrip("/")
+        secure = (os.getenv("CAMPAIGNNOVA_SECURE_COOKIES", "false").casefold() == "true"
+                  or os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production")
+        configured = configured and secure and api_url.startswith("https://")
+    return configured
+
+
+def _oauth_clients():
+    global OAUTH_CLIENTS
+    if OAUTH_CLIENTS is not None:
+        return OAUTH_CLIENTS
+    try:
+        from authlib.integrations.starlette_client import OAuth
+    except ImportError:
+        return None
+    registry = OAuth()
+    for provider, info in OAUTH_PROVIDER_INFO.items():
+        if not _oauth_is_configured(provider):
+            continue
+        prefix = info["prefix"]
+        registry.register(
+            name=provider,
+            client_id=os.getenv(f"CAMPAIGNNOVA_OAUTH_{prefix}_CLIENT_ID"),
+            client_secret=os.getenv(f"CAMPAIGNNOVA_OAUTH_{prefix}_CLIENT_SECRET"),
+            server_metadata_url=info["discovery"],
+            client_kwargs={"scope": "openid email" if provider == "apple" else "openid email profile"},
+        )
+    OAUTH_CLIENTS = registry
+    return registry
+
+
+def _oauth_callback_uri(provider: str) -> str:
+    api_url = os.getenv("CAMPAIGNNOVA_PUBLIC_API_URL", "http://localhost:8000").rstrip("/")
+    return f"{api_url}/api/auth/oauth/{provider}/callback"
+
+
+def _oauth_user_binding(user: dict) -> str:
+    secret = os.getenv("CAMPAIGNNOVA_OAUTH_SESSION_SECRET", "")
+    subject = f"{user.get('tenant_id', '')}:{user.get('id', '')}".encode()
+    return hmac.new(secret.encode(), subject, hashlib.sha256).hexdigest()
+
+
+def _oauth_redirect_url(error: str | None = None) -> str:
+    base = os.getenv("CAMPAIGNNOVA_PUBLIC_WEB_URL", "http://localhost:3000").rstrip("/")
+    return f"{base}/login" + (f"?error={error}" if error else "")
+
+
+def _oauth_completion_url(context: dict, error: str | None = None) -> str:
+    base = os.getenv("CAMPAIGNNOVA_PUBLIC_WEB_URL", "http://localhost:3000").rstrip("/")
+    if context.get("popup"):
+        return f"{base}/oauth-popup?" + (f"error={error}" if error else "result=success")
+    return _oauth_redirect_url(error) if error else f"{base}/"
+
+
+@router.get("/oauth/providers")
+def oauth_providers(workspace_slug: str | None = None):
+    if workspace_slug:
+        tenant = database.global_record("workspace_tenants", workspace_slug.strip().casefold())
+        if not tenant or tenant.get("slug") == "campaignnova-demo":
+            raise HTTPException(status_code=404, detail="Choose a registered company workspace")
+    return [{"id": provider, "name": info["name"], "configured": _oauth_is_configured(provider)}
+            for provider, info in OAUTH_PROVIDER_INFO.items()]
+
+
+@router.get("/oauth/identities")
+def oauth_identities(current: dict = Depends(require_user)):
+    linked = {row.get("provider") for row in database.list_records("oauth_identities")
+              if row.get("user_id") == current["id"]}
+    return [{"id": provider, "name": info["name"], "configured": _oauth_is_configured(provider),
+             "linked": provider in linked} for provider, info in OAUTH_PROVIDER_INFO.items()]
+
+
+@router.get("/oauth/{provider}/start")
+async def oauth_start(provider: str, request: Request, workspace_slug: str | None = None,
+                      intent: Literal["login", "link"] = "login", popup: bool = False):
+    provider = provider.casefold()
+    _rate_limit(_rate_key(request, f"oauth-{provider}", intent), 6, 900)
+    if provider not in OAUTH_PROVIDER_INFO or not _oauth_is_configured(provider):
+        raise HTTPException(status_code=503, detail="This sign-in provider has not been configured")
+    registry = _oauth_clients()
+    if registry is None:
+        raise HTTPException(status_code=503, detail="OAuth support is not installed; install backend requirements")
+    if intent == "link":
+        current = _request_user(request)
+        if current.get("account_type") != "user" or current.get("must_change_password"):
+            raise HTTPException(status_code=403, detail="Sign in to a regular account and change any temporary password before linking providers")
+        tenant = next((row for row in database.list_records("workspace_tenants", tenant_id="*")
+                       if row.get("id") == current.get("tenant_id")), None)
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Your company workspace was not found")
+        workspace_slug = tenant["slug"]
+        link_user_binding = _oauth_user_binding(current)
+    else:
+        tenant = database.global_record("workspace_tenants", (workspace_slug or "").strip().casefold())
+        if not tenant or tenant.get("slug") == "campaignnova-demo":
+            raise HTTPException(status_code=400, detail="Choose a company workspace before using social sign-in")
+        link_user_binding = None
+    client = registry.create_client(provider)
+    response_mode = "form_post" if provider == "apple" else None
+    kwargs = {"response_mode": response_mode, "nonce": secrets.token_urlsafe(24)} if response_mode else {}
+    if provider in {"google", "microsoft"}:
+        # Send the user to the provider's account chooser/login screen instead
+        # of silently reusing a previously authenticated provider session.
+        kwargs["prompt"] = "select_account"
+    response = await client.authorize_redirect(request, _oauth_callback_uri(provider), **kwargs)
+    location = response.headers.get("location", "")
+    state = next((value for key, value in parse_qsl(urlsplit(location).query) if key == "state"), None)
+    if not state:
+        raise HTTPException(status_code=502, detail="The identity provider could not start sign-in")
+    contexts = request.session.get("campaignnova_oauth_contexts", {})
+    contexts[state] = {"provider": provider, "workspace_slug": tenant["slug"],
+                       "intent": intent, "link_user_binding": link_user_binding,
+                       "popup": popup and intent == "login",
+                       "created_at": int(time.time())}
+    request.session["campaignnova_oauth_contexts"] = dict(list(contexts.items())[-4:])
+    return response
+
+
+@router.get("/oauth/{provider}/callback")
+@router.post("/oauth/{provider}/callback")
+async def oauth_callback(provider: str, request: Request):
+    provider = provider.casefold()
+    registry = _oauth_clients()
+    if provider not in OAUTH_PROVIDER_INFO or not _oauth_is_configured(provider) or registry is None:
+        return RedirectResponse(_oauth_redirect_url("provider_unavailable"), status_code=303)
+    if request.method == "GET":
+        state = request.query_params.get("state", "")
+    else:
+        form_data = await request.form()
+        state = str(form_data.get("state", ""))
+    contexts = request.session.get("campaignnova_oauth_contexts", {})
+    context = contexts.pop(state, None) if state else None
+    request.session["campaignnova_oauth_contexts"] = contexts
+    if not context or context.get("provider") != provider or int(time.time()) - context.get("created_at", 0) > 600:
+        return RedirectResponse(_oauth_redirect_url("state_invalid"), status_code=303)
+    try:
+        client = registry.create_client(provider)
+        token = await client.authorize_access_token(
+            request, claims_options={"iss": {"essential": True}} if provider == "microsoft" else None
+        )
+        identity = token.get("userinfo") or {}
+        subject = str(identity.get("sub") or "").strip()
+        email = str(identity.get("email") or "").strip().casefold()
+        if not subject:
+            raise ValueError("Identity provider did not return a subject identifier")
+        if provider == "microsoft":
+            tenant_claim = str(identity.get("tid") or "")
+            expected_issuer = f"https://login.microsoftonline.com/{tenant_claim}/v2.0"
+            if not re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", tenant_claim) or identity.get("iss") != expected_issuer:
+                raise ValueError("Microsoft token issuer and tenant claims do not match")
+        tenant = database.global_record("workspace_tenants", context["workspace_slug"])
+        if not tenant or tenant.get("slug") == "campaignnova-demo":
+            return RedirectResponse(_oauth_completion_url(context, "workspace_unavailable"), status_code=303)
+        database.set_tenant(tenant["id"])
+        identity_key = f"{provider}-{hashlib.sha256(subject.encode()).hexdigest()}"
+        existing_identity = next((row for row in database.list_records("oauth_identities")
+                                  if row.get("id") == identity_key), None)
+        if context["intent"] == "link":
+            current = _request_user(request)
+            if (not hmac.compare_digest(_oauth_user_binding(current), str(context.get("link_user_binding", "")))
+                    or current.get("tenant_id") != tenant["id"]
+                    or current.get("account_type") != "user" or current.get("must_change_password")):
+                return RedirectResponse(_oauth_redirect_url("link_session_expired"), status_code=303)
+            if existing_identity and existing_identity.get("user_id") != current["id"]:
+                return RedirectResponse(_oauth_redirect_url("identity_already_linked"), status_code=303)
+            database.save_record("oauth_identities", identity_key, {
+                "id": identity_key, "provider": provider, "subject_hash": hashlib.sha256(subject.encode()).hexdigest(),
+                "user_id": current["id"], "tenant_id": tenant["id"], "linked_at": _now().isoformat(),
+            })
+            record_audit_event(current["email"], "oauth_identity_linked", "user", current["id"], {"provider": provider})
+            return RedirectResponse(f"{os.getenv('CAMPAIGNNOVA_PUBLIC_WEB_URL', 'http://localhost:3000').rstrip('/')}/profile?linked={provider}", status_code=303)
+        user = next((row for row in _accounts() if existing_identity and row.get("id") == existing_identity.get("user_id")), None)
+        if not user:
+            verified = identity.get("email_verified") is True or str(identity.get("email_verified", "")).casefold() == "true"
+            if not email or not verified:
+                return RedirectResponse(_oauth_completion_url(context, "email_not_verified"), status_code=303)
+            user = _find_email(email)
+        if not user:
+            return RedirectResponse(_oauth_completion_url(context, "account_not_found"), status_code=303)
+        if user.get("status") != "Active":
+            return RedirectResponse(_oauth_completion_url(context, "account_inactive"), status_code=303)
+        if user.get("must_change_password"):
+            return RedirectResponse(_oauth_completion_url(context, "password_change_required"), status_code=303)
+        if existing_identity and existing_identity.get("user_id") != user["id"]:
+            return RedirectResponse(_oauth_completion_url(context, "identity_mismatch"), status_code=303)
+        if not existing_identity:
+            database.save_record("oauth_identities", identity_key, {
+                "id": identity_key, "provider": provider, "subject_hash": hashlib.sha256(subject.encode()).hexdigest(),
+                "user_id": user["id"], "tenant_id": tenant["id"], "linked_at": _now().isoformat(),
+            })
+        user["last_login_at"] = _now().isoformat()
+        _save_user(user)
+        response = RedirectResponse(_oauth_completion_url(context), status_code=303)
+        _new_session(response, user)
+        record_audit_event(user["email"], "signed_in_with_oauth", "user", user["id"], {"provider": provider})
+        return response
+    except Exception:
+        return RedirectResponse(_oauth_completion_url(context, "oauth_failed"), status_code=303)
+
+
 @router.post("/demo-login")
 def demo_login(request: Request, response: Response):
     """Create a read-only session scoped to the seeded CampaignNova demo tenant."""
@@ -631,7 +895,20 @@ def demo_login(request: Request, response: Response):
         "CAMPAIGNNOVA_DEMO_MODE", "false"
     ).casefold() != "true":
         raise HTTPException(status_code=404, detail="Demo access is not enabled")
-    _rate_limit(_rate_key(request, "demo-login", "guest"), 10, 900)
+    existing_token = request.cookies.get(SESSION_COOKIE)
+    if existing_token:
+        existing_session = next((row for row in database.list_records("auth_sessions", tenant_id="*")
+                                 if row.get("id") == _token_hash(existing_token)), None)
+        if (existing_session and existing_session.get("demo_guest") and not existing_session.get("revoked")
+                and existing_session.get("tenant_id") == "campaignnova-demo"
+                and _utc(existing_session["expires_at"]) > _now()):
+            database.set_tenant("campaignnova-demo")
+            guest = _request_user_from_demo("campaignnova-demo")
+            return {"user": public_user(guest), "access": "read-only",
+                    "modules": ["dashboard", "analytics-insights", "reports-exports", "predictive-intelligence", "ab-testing"]}
+    # Guest access is read-only. Keep a high abuse ceiling so people sharing a
+    # home, office, school, or proxy IP do not block each other from the demo.
+    _rate_limit(_rate_key(request, "demo-login", "guest"), 1000, 900)
     tenant_id = "campaignnova-demo"
     database.set_tenant(tenant_id)
     token = secrets.token_urlsafe(40)

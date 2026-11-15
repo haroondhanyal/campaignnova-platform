@@ -1,4 +1,5 @@
 import {getExampleNumber,isPossiblePhoneNumber,isSupportedCountry,validatePhoneNumberLength} from 'libphonenumber-js';
+import type {CountryCode} from 'libphonenumber-js';
 import examples from 'libphonenumber-js/examples.mobile.json';
 import {countries} from './countries';
 
@@ -8,9 +9,9 @@ export function countryForCallingCode(code:string){
 
 export function phoneFormat(country:string){
   const option=countries.find(([name])=>name===country)||countries.find(([name])=>name==='Pakistan')!;
-  const countryCode=isSupportedCountry(option[3])?option[3]:'PK';
+  const countryCode:CountryCode=isSupportedCountry(option[3])?option[3] as CountryCode:'PK';
   const example=getExampleNumber(countryCode,examples)?.nationalNumber||'1234567890';
-  return {callingCode:option[1],countryCode:option[3],example,digits:example.length};
+  return {callingCode:option[1],countryCode,example,digits:example.length};
 }
 
 export function phoneNumberError(country:string,number:string){

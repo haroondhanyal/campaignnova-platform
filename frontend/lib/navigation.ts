@@ -33,13 +33,15 @@ const departmentModules:Record<string,Set<string>>={
  Administration:new Set(allNav.map(item=>item.href.slice(1))),
 };
 export function canSeeModule(user:{role:string;department:string;enabled_modules?:string[];department_modules?:string[];module_access?:string[]|null},href:string){
- if(href==='/')return true;
+ if(href==='/'){
+  if(user.enabled_modules&&!user.enabled_modules.includes('dashboard'))return false;
+  return !Array.isArray(user.module_access)||user.module_access.includes('dashboard');
+ }
  const module=href.slice(1),isAdmin=['Super Admin','Organization Admin','Admin'].includes(user.role);
- if(isAdmin&&['settings','user-roles'].includes(module))return true;
- if(module==='feature-access')return true;
  if(user.enabled_modules&&!user.enabled_modules.includes(module))return false;
- if(isAdmin)return true;
- if(user.module_access&&!user.module_access.includes(module))return false;
+ if(isAdmin)return !Array.isArray(user.module_access)||user.module_access.includes(module);
+ if(Array.isArray(user.module_access))return user.module_access.includes(module);
+ if(module==='feature-access')return true;
  return user.department_modules?user.department_modules.includes(module):departmentModules[user.department]?.has(module)||false;
 }
 export function visibleNavGroups(user:{role:string;department:string;enabled_modules?:string[];department_modules?:string[];module_access?:string[]|null}){return navGroups.map(group=>({...group,items:group.items.filter(item=>canSeeModule(user,item.href))})).filter(group=>group.items.length>0)}

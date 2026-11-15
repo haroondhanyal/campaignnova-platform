@@ -1,8 +1,14 @@
 from contextlib import asynccontextmanager
 import hashlib
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from . import store
 from . import database
 from .routers import administration, ai, approvals, audiences, authentication, business_rules, campaigns, customers, dashboard, execution, experiments, feature_access, intelligence, integrations, journeys, offers, reports, scenarios, system, workspaces
@@ -48,6 +54,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Authlib stores short-lived OAuth state and OIDC nonce data in this signed
+# browser session. Production OAuth is disabled unless an operator sets a
+# stable high-entropy CAMPAIGNNOVA_OAUTH_SESSION_SECRET.
+_oauth_session_secret = os.getenv("CAMPAIGNNOVA_OAUTH_SESSION_SECRET") or os.urandom(48).hex()
+_secure_oauth_cookie = (os.getenv("CAMPAIGNNOVA_SECURE_COOKIES", "false").casefold() == "true"
+                        or os.getenv("CAMPAIGNNOVA_ENV", "development").casefold() == "production")
+app.add_middleware(SessionMiddleware, secret_key=_oauth_session_secret,
+                   session_cookie="campaignnova_oauth", max_age=600,
+                   same_site="none" if _secure_oauth_cookie else "lax",
+                   https_only=_secure_oauth_cookie)
 
 app.include_router(system.router, prefix="/api")
 app.include_router(authentication.router, prefix="/api")

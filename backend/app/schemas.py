@@ -27,7 +27,9 @@ class CampaignCreate(BaseModel):
     channel: str = "SMS"
     audience: str = "All eligible customers"
     segment_id: str | None = None
+    imported_audience_id: str | None = None
     offer_id: str | None = None
+    message_template: str = Field(default="", max_length=1600)
     start_date: date | None = None
     end_date: date | None = None
     budget: float = Field(default=0, ge=0)
@@ -38,6 +40,10 @@ class CampaignCreate(BaseModel):
     def validate_date_range(self):
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValueError("Campaign end date must be on or after its start date")
+        if self.segment_id and self.imported_audience_id:
+            raise ValueError("Choose a saved segment or an imported audience, not both")
+        if self.imported_audience_id and not self.message_template.strip():
+            raise ValueError("Add a message template for the imported audience campaign")
         return self
 
 
@@ -52,7 +58,9 @@ class CampaignPatch(BaseModel):
     channel: str | None = None
     audience: str | None = None
     segment_id: str | None = None
+    imported_audience_id: str | None = None
     offer_id: str | None = None
+    message_template: str | None = Field(default=None, max_length=1600)
     start_date: date | None = None
     end_date: date | None = None
     budget: float | None = Field(default=None, ge=0)

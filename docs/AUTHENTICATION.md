@@ -3,16 +3,16 @@
 ## Local setup
 
 1. Start the backend and web app using the repository instructions.
-2. Open `/signup`, enter the company name, and create its workspace. The first account for that company becomes its Super Admin and is signed in automatically. The workspace code is the company name in lowercase with spaces replaced by hyphens.
-3. In the admin panel, approve team signup requests or create employee accounts with a department, role, phone, and temporary password.
-4. Employees sign in at `/login` using the company workspace code, email, and password. Admin-created accounts must change their temporary password on first sign-in. The optional “Remember this device” setting keeps the HTTP-only session active for 30 days instead of 12 hours; it never stores the password. Password fields use browser password-manager autocomplete, so Chrome may offer to save credentials to Google Password Manager.
+2. Open `/signup` and choose **Super Admin** to initialize an existing workspace that has no accounts yet. Production also requires `CAMPAIGNNOVA_BOOTSTRAP_TOKEN`. This creates the first Super Admin and signs them in; it does not create a company workspace.
+3. A signed-in Super Admin can create a company workspace and its first Super Admin from `/user-roles`. They can also provision accounts directly or approve pending User signup requests.
+4. Users choose their company by name/logo on `/login`. Admin-created accounts must change their temporary password on first sign-in. The optional “Remember this device” setting keeps the HTTP-only session active for 30 days instead of 12 hours; it never stores the password.
 
-Later self-signups remain pending until an administrator assigns a role and enables the account. Passwords are stored as salted PBKDF2-SHA256 hashes. Successful sign-in issues a 12-hour HTTP-only, SameSite=Lax session cookie. Logout, password change, password reset, and account disable revoke existing sessions.
+User self-signups to existing workspaces remain pending until an administrator approves and assigns a role. Users cannot join an unclaimed workspace before its first Super Admin setup. Passwords are stored as salted PBKDF2-SHA256 hashes. Successful sign-in issues a 12-hour HTTP-only, SameSite=Lax session cookie. Logout, password change, password reset, and account disable revoke existing sessions.
 
 ## Account screens and API
 
-- `/signup`: company name, account name, work email, country calling code, phone number, department, profile image, and password. The first account becomes that workspace Super Admin; repeat signup joins that company as a pending request.
-- `/login`: workspace code, email, password, and optional 30-day remembered session. Entering a valid workspace code previews that company's name and logo.
+- `/signup`: choose User account, Company account, or Super Admin. Users request to join an existing workspace. Initial Super Admin setup is limited to an unclaimed workspace. Company accounts/workspaces are created only by a signed-in Super Admin from `/user-roles`.
+- `/login`: searchable company workspace picker with local logo, email, password, and optional 30-day remembered session.
 - `/forgot-password` and `/reset-password`: company workspace code plus one-time, 30-minute reset links.
 - `/profile`: profile photo and phone update, plus password change. Email is the immutable sign-in ID.
 - `/user-roles`: Super Admin and Organization Admin account, department, role, module assignment, and approval panel.
@@ -29,7 +29,7 @@ Phone inputs use international country calling codes, numeric-only national-numb
 
 Every company workspace offers reusable department options for Administration, Marketing, Commercial, CVM, Segments, Customer Care, Sales, Customer Success, Product & Services, Retail Sales, Digital Services, Business Development, Business Operations, Operations, Campaign Operations, Data & Analytics, Engineering, Technology & IT, Finance, Human Resources, People & Organization, Carrier & International Wholesale, and Legal & Regulatory. Each workspace assigns its own users to departments and roles. Each signed-in session scopes campaign, customer, segment, offer, scenario, governance, and settings records to its company.
 
-Roles include Super Admin, Organization Admin, Admin, Department Manager, Campaign Manager, CVM Manager, Segment Analyst, Customer Care Agent, Commercial Analyst, Campaign Agent, Agent, Approver, Data Analyst, Integration Admin, and Viewer. A new company workspace begins with core modules. Its Super Admin can brand the company workspace and enable optional modules. Department Managers can manage only their own department’s allocation from the company-enabled modules. Employees can request any catalog feature; the Super Admin can approve it, which enables the feature for that company if needed and grants it to the requesting department and account. Department Managers may approve requests for their own department only after the company has enabled the feature. Requests and access changes are tenant-scoped and audited. API and navigation scopes follow the company-enabled set, department policy, and any account-level module assignment. Read-only roles cannot submit changes outside the feature-request workflow. The first account in each company is its public self-signup path to Super Admin.
+Roles include Super Admin, Organization Admin, Admin, Department Manager, Campaign Manager, CVM Manager, Segment Analyst, Customer Care Agent, Commercial Analyst, Campaign Agent, Agent, Approver, Data Analyst, Integration Admin, and Viewer. A new company workspace begins with core modules. Its Super Admin can brand the company workspace and enable optional modules. Department Managers can manage only their own department’s allocation from the company-enabled modules. Employees can request any catalog feature; the Super Admin can approve it, which enables the feature for that company if needed and grants it to the requesting department and account. Department Managers may approve requests for their own department only after the company has enabled the feature. Requests and access changes are tenant-scoped and audited. API and navigation scopes follow the company-enabled set, department policy, and any account-level module assignment. Read-only roles cannot submit changes outside the feature-request workflow. An unclaimed existing workspace can receive its initial Super Admin through the dedicated setup flow. Once claimed, further Super Admin accounts must be provisioned by an existing Super Admin.
 
 ## Password reset email
 
@@ -49,7 +49,7 @@ CAMPAIGNNOVA_WEB_ORIGINS=https://campaigns.example.com
 CAMPAIGNNOVA_SECURE_COOKIES=true
 ```
 
-For first-time production bootstrap, set `CAMPAIGNNOVA_BOOTSTRAP_TOKEN` to a one-time secret and enter it on the initial signup form. The local development defaults do not require this token.
+For first-time production Super Admin setup, set `CAMPAIGNNOVA_BOOTSTRAP_TOKEN` and enter it in the Super Admin signup flow. Local development does not require this token.
 
 ## Deployment boundary
 

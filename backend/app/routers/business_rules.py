@@ -109,7 +109,7 @@ def set_activation(rule_id: str, active: bool):
 
 @router.delete("/{rule_id}", status_code=204)
 def delete_rule(rule_id: str):
-    _rule(rule_id)
+    current = _rule(rule_id)
     # Keep persistence operations behind the database abstraction.
     from ..database import connect
     with connect() as db:

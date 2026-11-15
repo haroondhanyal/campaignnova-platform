@@ -1,13 +1,15 @@
 'use client';
 import {useCallback, useEffect, useState} from 'react';
+import {useSearchParams} from 'next/navigation';
 import {apiGet, apiPost} from '@/lib/api';
 
 type Campaign={id:string;name:string;channel:string;status:string};
 type CustomerAttempt={customer_id:string;identifier:string;status:string;attempts:number;result:string};
-type Run={id:string;campaign_id:string;campaign_name:string;channel:string;mode:string;status:string;batch_number:number;summary:{targeted:number;queued:number;simulated_delivered:number;failed:number;dead_letter:number;consent_excluded:number;rule_excluded:number};customers:CustomerAttempt[]};
+type Run={id:string;campaign_id:string;campaign_name:string;channel:string;mode:string;status:string;batch_number:number;audience_source?:string;message_template?:string;summary:{targeted:number;queued:number;simulated_delivered:number;failed:number;dead_letter:number;consent_excluded:number;rule_excluded:number};customers:CustomerAttempt[]};
 
 export function ExecutionConsole(){
-  const [campaigns,setCampaigns]=useState<Campaign[]>([]);const [runs,setRuns]=useState<Run[]>([]);const [campaignId,setCampaignId]=useState('');
+  const searchParams=useSearchParams();const requestedCampaignId=searchParams.get('campaign_id')||'';
+  const [campaigns,setCampaigns]=useState<Campaign[]>([]);const [runs,setRuns]=useState<Run[]>([]);const [campaignId,setCampaignId]=useState(requestedCampaignId);
   const [error,setError]=useState('');const [notice,setNotice]=useState('');const [busy,setBusy]=useState(false);
   const refresh=useCallback(async()=>{const [cs,rs]=await Promise.all([apiGet<Campaign[]>('/campaigns'),apiGet<Run[]>('/execution/runs')]);setCampaigns(cs);setRuns(rs);if(!campaignId&&cs.length)setCampaignId(cs[0].id)},[campaignId]);
   useEffect(()=>{refresh().catch(e=>setError(e.message))},[refresh]);
@@ -19,7 +21,8 @@ export function ExecutionConsole(){
       <p style={{fontSize:10,color:'#7d899b',margin:'12px 0 0'}}>Uses masked customer identifiers and consent checks. The adapter records simulated outcomes only; it never sends SMS, WhatsApp, push, email, or other messages.</p>
       {error&&<p role="alert" style={{color:'#c2413b',fontSize:12}}>{error}</p>}{notice&&<p role="status" style={{color:'#0b9472',fontSize:12}}>{notice}</p>}
     </section>
-    {runs.map(run=><section className="card" key={run.id} style={{overflow:'hidden'}}><div className="table-head"><div><h2 className="section-title">{run.campaign_name} <span style={{color:'#8995a7',fontWeight:400}}>· {run.id}</span></h2><p className="section-sub">{run.channel} adapter · batch {run.batch_number} · {run.status} · idempotent run</p></div><div style={{display:'flex',gap:7,flexWrap:'wrap'}}>{run.status==='Queued'&&<button className="secondary-btn" disabled={busy} onClick={()=>act(run.id,'pause')}>Pause</button>}{(run.status==='Paused'||run.status==='Queued')&&<button className="secondary-btn" disabled={busy} onClick={()=>act(run.id,'resume')}>Next batch / resume</button>}{run.summary.failed>0&&<button className="secondary-btn" disabled={busy} onClick={()=>act(run.id,'retry')}>Retry failures</button>}</div></div>
+    {runs.map(run=><section className="card" key={run.id} style={{overflow:'hidden'}}><div className="table-head"><div><h2 className="section-title">{run.campaign_name} <span style={{color:'#8995a7',fontWeight:400}}>· {run.id}</span></h2><p className="section-sub">{run.channel} simulation · {run.audience_source||'workspace sample'} · batch {run.batch_number} · {run.status}</p></div><div style={{display:'flex',gap:7,flexWrap:'wrap'}}>{run.status==='Queued'&&<button className="secondary-btn" disabled={busy} onClick={()=>act(run.id,'pause')}>Pause</button>}{(run.status==='Paused'||run.status==='Queued')&&<button className="secondary-btn" disabled={busy} onClick={()=>act(run.id,'resume')}>Next batch / resume</button>}{run.summary.failed>0&&<button className="secondary-btn" disabled={busy} onClick={()=>act(run.id,'retry')}>Retry failures</button>}</div></div>
+      {run.message_template&&<div className="execution-message-preview"><b>Message preview</b><p>{run.message_template}</p><small>Displayed for review only. The local simulator does not send this message.</small></div>}
       <div style={{display:'flex',gap:18,flexWrap:'wrap',padding:'0 18px 14px',fontSize:11,color:'#65748b'}}><span>Eligible: <b>{run.summary.targeted}</b></span><span>Simulated delivered: <b>{run.summary.simulated_delivered}</b></span><span>Queued: <b>{run.summary.queued}</b></span><span>Failed: <b>{run.summary.failed}</b></span><span>Dead letter: <b style={{color:run.summary.dead_letter?'#bd3933':undefined}}>{run.summary.dead_letter}</b></span><span>Excluded without consent/inactive: <b>{run.summary.consent_excluded}</b></span><span>Suppressed by active rules: <b>{run.summary.rule_excluded}</b></span><span>Mode: <b>{run.mode}</b></span></div>
       <div className="responsive-table"><table className="data-table"><thead><tr><th>CUSTOMER</th><th>SIMULATION STATUS</th><th>ATTEMPTS</th><th>LOCAL ADAPTER RESULT</th></tr></thead><tbody>{run.customers.map(item=><tr key={item.customer_id}><td>{item.identifier}</td><td><span className={`status ${item.status==='Simulated Delivered'?'completed':item.status==='Simulated Failed'?'paused':'draft'}`}>{item.status}{item.status==='Simulated Failed'&&item.attempts>=3?' · DEAD LETTER':''}</span></td><td>{item.attempts}</td><td>{item.result}</td></tr>)}</tbody></table></div>
     </section>)}
