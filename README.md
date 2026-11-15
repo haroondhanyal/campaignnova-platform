@@ -102,60 +102,96 @@ Register the matching callback URL with each provider. Google and Microsoft acce
 
 These captures show the current screens against a temporary documentation workspace. They use synthetic data and contain no real account credentials. The Google setup-dialog screenshot records the unconfigured local OAuth state; provider sign-in only becomes available after valid provider credentials are set.
 
-![Sign-in, sign-up, and recovery screen captures](docs/screenshots/contact-sheets/auth.jpg)
 
-| Flow | Screenshot |
-| --- | --- |
-| Company sign-in, guest option, and social provider buttons | [Open sign-in](docs/screenshots/auth/sign-in.jpg) |
-| Google provider setup dialog | [Open provider setup state](docs/screenshots/auth/google-provider-setup.jpg) |
-| Request access to an existing company | [Open user sign-up](docs/screenshots/auth/sign-up-user.jpg) |
-| Initial Super Admin setup | [Open Super Admin sign-up](docs/screenshots/auth/sign-up-super-admin.jpg) |
-| Company creation restriction for public sign-up | [Open company account gate](docs/screenshots/auth/company-account-gate.jpg) |
-| Forgot password | [Open recovery request](docs/screenshots/auth/forgot-password.jpg) |
-| Choose a new password from a reset link | [Open reset-password form](docs/screenshots/auth/reset-password.jpg) |
+#### Company sign-in and Eid carousel
+
+![Company sign-in and Eid carousel — full-size app screenshot](docs/screenshots/auth/sign-in.jpg)
+
+#### Google OAuth setup dialog
+
+![Google OAuth setup dialog — full-size app screenshot](docs/screenshots/auth/google-provider-setup.jpg)
+
+#### Request a user account
+
+![Request a user account — full-size app screenshot](docs/screenshots/auth/sign-up-user.jpg)
+
+#### Initial Super Admin setup
+
+![Initial Super Admin setup — full-size app screenshot](docs/screenshots/auth/sign-up-super-admin.jpg)
+
+#### Company account creation gate
+
+![Company account creation gate — full-size app screenshot](docs/screenshots/auth/company-account-gate.jpg)
+
+#### Password recovery request
+
+![Password recovery request — full-size app screenshot](docs/screenshots/auth/forgot-password.jpg)
+
+#### Reset password form
+
+![Reset password form — full-size app screenshot](docs/screenshots/auth/reset-password.jpg)
 
 ### Screenshots: guest demo account
 
 The guest account has read-only access to the synthetic demo tenant. It can view the dashboard, Analytics & Insights, Predictive Intelligence, Reports & Exports, and A/B Testing. The restricted Campaign Studio capture shows how the app handles a module outside the guest role.
 
-![Guest demo screen captures](docs/screenshots/contact-sheets/guest.jpg)
 
-| Guest view | Screenshot |
-| --- | --- |
-| Demo dashboard and read-only banner | [Open guest dashboard](docs/screenshots/guest/dashboard.jpg) |
-| Analytics & Insights | [Open guest analytics](docs/screenshots/guest/analytics-insights.jpg) |
-| Predictive Intelligence | [Open guest predictive insights](docs/screenshots/guest/predictive-intelligence.jpg) |
-| Reports & Exports | [Open guest reports](docs/screenshots/guest/reports-exports.jpg) |
-| A/B Testing | [Open guest experiments](docs/screenshots/guest/ab-testing.jpg) |
-| Role-restricted Campaign Studio | [Open restricted-module state](docs/screenshots/guest/campaign-studio-restricted.jpg) |
+#### Guest demo dashboard
+
+![Guest demo dashboard — full-size app screenshot](docs/screenshots/guest/dashboard.jpg)
+
+#### Guest Analytics & Insights
+
+![Guest Analytics & Insights — full-size app screenshot](docs/screenshots/guest/analytics-insights.jpg)
+
+#### Guest Predictive Intelligence
+
+![Guest Predictive Intelligence — full-size app screenshot](docs/screenshots/guest/predictive-intelligence.jpg)
+
+#### Guest Reports & Exports
+
+![Guest Reports & Exports — full-size app screenshot](docs/screenshots/guest/reports-exports.jpg)
+
+#### Guest A/B Testing
+
+![Guest A/B Testing — full-size app screenshot](docs/screenshots/guest/ab-testing.jpg)
+
+#### Guest access restriction example
+
+![Guest access restriction example — full-size app screenshot](docs/screenshots/guest/campaign-studio-restricted.jpg)
 
 ### Screenshots: regular Campaign Manager account
 
 This active user account was created and approved inside the temporary documentation workspace. It demonstrates department-scoped navigation and the administrator-only account-management restriction.
 
-![Campaign Manager screen captures](docs/screenshots/contact-sheets/campaign-manager.jpg)
 
-| Campaign Manager view | Screenshot |
-| --- | --- |
-| Workspace dashboard | [Open user dashboard](docs/screenshots/campaign-manager/dashboard.jpg) |
-| Campaign creation and lifecycle | [Open Campaign Studio](docs/screenshots/campaign-manager/campaign-studio.jpg) |
-| Approval queue | [Open Approvals & Governance](docs/screenshots/campaign-manager/approvals.jpg) |
-| Reports | [Open Reports & Exports](docs/screenshots/campaign-manager/reports-exports.jpg) |
-| Administrator-only account directory | [Open restricted User & Role Management](docs/screenshots/campaign-manager/user-roles-restricted.jpg) |
-| User profile and session controls | [Open profile](docs/screenshots/campaign-manager/profile.jpg) |
+#### Campaign Manager dashboard
+
+![Campaign Manager dashboard — full-size app screenshot](docs/screenshots/campaign-manager/dashboard.jpg)
+
+#### Campaign Manager Campaign Studio
+
+![Campaign Manager Campaign Studio — full-size app screenshot](docs/screenshots/campaign-manager/campaign-studio.jpg)
+
+#### Campaign Manager approvals
+
+![Campaign Manager approvals — full-size app screenshot](docs/screenshots/campaign-manager/approvals.jpg)
+
+#### Campaign Manager reports
+
+![Campaign Manager reports — full-size app screenshot](docs/screenshots/campaign-manager/reports-exports.jpg)
+
+#### Campaign Manager account-management restriction
+
+![Campaign Manager account-management restriction — full-size app screenshot](docs/screenshots/campaign-manager/user-roles-restricted.jpg)
+
+#### Campaign Manager profile
+
+![Campaign Manager profile — full-size app screenshot](docs/screenshots/campaign-manager/profile.jpg)
 
 ### Screenshots: Super Admin and module workspaces
 
-The documentation Super Admin has every module enabled in the temporary workspace. Module screenshots are listed in the [frontend screen and component guide](#feature-workspaces), alongside each module's purpose. These pages demonstrate the UI and synthetic sample state; they do not imply that external delivery or OAuth providers are connected.
-
-![Super Admin module screen captures](docs/screenshots/contact-sheets/super-admin.jpg)
-
-| Super Admin view | Screenshot |
-| --- | --- |
-| Workspace dashboard | [Open Super Admin dashboard](docs/screenshots/super-admin/dashboard.jpg) |
-| Team directory, role controls, and module grants | [Open User & Role Management](docs/screenshots/super-admin/user-roles.jpg) |
-| Workspace configuration and appearance | [Open System Configuration](docs/screenshots/super-admin/settings.jpg) |
-| Module and account profile | [Open Super Admin profile](docs/screenshots/super-admin/profile.jpg) |
+The documentation Super Admin has every module enabled in the temporary workspace. Each screen below is embedded separately at its original 1440 × 1100 capture resolution, with its module name above it. These captures use synthetic sample data and do not imply that external delivery or OAuth providers are connected.
 
 ## Architecture
 
@@ -235,32 +271,133 @@ The browser calls the FastAPI `/api` routes through `frontend/lib/api.ts` using 
 
 | Screen/component | What it does | Screenshot |
 | --- | --- | --- |
-| `frontend/app/page.tsx` | Landing dashboard with workspace metrics, activity, and module entry points. | [Dashboard](docs/screenshots/super-admin/dashboard.jpg) |
-| `frontend/features/scenarios/ScenarioWorkspace.tsx` | Compare campaign scenarios and inspect planning simulations. | [Scenario Studio](docs/screenshots/super-admin/scenario-studio.jpg) |
-| `frontend/features/campaigns/CampaignStudio.tsx` | Create and maintain campaign plans and their audience, channel, schedule, and offer settings. | [Campaign Studio](docs/screenshots/super-admin/campaign-studio.jpg) |
-| `frontend/features/campaigns/CampaignCalendar.tsx` | Review scheduled campaign activity in a calendar view. | [Campaign Calendar](docs/screenshots/super-admin/campaign-calendar.jpg) |
-| `frontend/features/customers/Customer360.tsx` | Search customer profiles and inspect lifecycle, value, consent, and interaction context. Uses synthetic development records. | [Customer 360](docs/screenshots/super-admin/customer-360.jpg) |
-| `frontend/features/audiences/SegmentManager.tsx` | Create and review audience segments and their estimated reach. | [Audience & Segments](docs/screenshots/super-admin/audience-segments.jpg) |
-| `frontend/features/audiences/SegmentManager.tsx` | Preview audience estimates from validated rules against the local synthetic sample. | [AI Segment Builder](docs/screenshots/super-admin/ai-segment-builder.jpg) |
-| `frontend/features/offers/OfferCatalog.tsx` | Manage offer catalog records and campaign eligibility details. | [Offer Management](docs/screenshots/super-admin/offer-management.jpg) |
-| `frontend/features/journeys/JourneyBuilder.tsx` | Configure customer journey steps and orchestration paths. | [Journey Orchestration](docs/screenshots/super-admin/journey-orchestration.jpg) |
-| `frontend/features/orchestration/AutomationCenter.tsx` | Manage workflow automation and operational triggers. | [Workflow Automation](docs/screenshots/super-admin/workflow-automation.jpg) |
-| `frontend/features/execution/ExecutionConsole.tsx` | Run and inspect simulated campaign execution outcomes; no live delivery provider is called. | [Campaign Execution](docs/screenshots/super-admin/campaign-execution.jpg) |
-| `frontend/features/governance/IntegrationHub.tsx` | Review channel adapter requirements and connection state. External channels remain unconnected. | [Channel Management](docs/screenshots/super-admin/channel-management.jpg) |
-| `frontend/features/intelligence/NovaAssistant.tsx` | Ask about synthetic workspace data or draft campaign copy using Gemini when configured, otherwise local templates. | [Nova AI Assistant](docs/screenshots/super-admin/nova-ai.jpg) |
-| `frontend/features/intelligence/IntelligenceWorkspace.tsx` | Explore explainable, rule-based offer cues and observed aggregates. | [Predictive Intelligence](docs/screenshots/super-admin/predictive-intelligence.jpg) |
-| `frontend/features/intelligence/ExperimentWorkspace.tsx` | Plan a test hypothesis and preview consent-filtered sample allocation. | [A/B Testing](docs/screenshots/super-admin/ab-testing.jpg) |
-| `frontend/features/intelligence/IntelligenceWorkspace.tsx` | Explore observed aggregates, descriptive cohorts, and customer/campaign signals. | [Analytics & Insights](docs/screenshots/super-admin/analytics-insights.jpg) |
-| `frontend/features/reports/ReportsWorkspace.tsx` | Review and export reports from observed campaign and simulation data. | [Reports & Exports](docs/screenshots/super-admin/reports-exports.jpg) |
-| `frontend/features/governance/IntegrationHub.tsx` | Review integration connector requirements and connection status. | [Data Integration Hub](docs/screenshots/super-admin/integrations.jpg) |
-| `frontend/features/rules/BusinessRuleManager.tsx` | Define eligibility rules, frequency caps, and quiet-hour suppression. | [Business Rules Engine](docs/screenshots/super-admin/business-rules.jpg) |
-| `frontend/features/governance/ApprovalsWorkspace.tsx` | Review pending changes and submit approval decisions according to role. | [Approvals & Governance](docs/screenshots/super-admin/approvals.jpg) |
-| `frontend/features/governance/FeatureAccessWorkspace.tsx` | Review department feature requests and company module availability. | [Feature Access](docs/screenshots/super-admin/feature-access.jpg) |
-| `frontend/features/governance/AdministrationWorkspace.tsx` | Manage team accounts, roles, departments, account approval, and per-user module access. | [User & Role Management](docs/screenshots/super-admin/user-roles.jpg) |
-| `frontend/features/governance/AuditLogWorkspace.tsx` | Inspect the workspace audit trail. | [Audit Logs](docs/screenshots/super-admin/audit-logs.jpg) |
-| `frontend/features/governance/SettingsWorkspace.tsx` | Configure workspace preferences, modules, branding, and appearance. | [System Configuration](docs/screenshots/super-admin/settings.jpg) |
-| `frontend/features/auth/ProfileWorkspace.tsx` | Update profile details, change a password, adjust appearance, and sign out. | [Account profile](docs/screenshots/super-admin/profile.jpg) |
+| `frontend/app/page.tsx` | Landing dashboard with workspace metrics, activity, and module entry points. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/scenarios/ScenarioWorkspace.tsx` | Compare campaign scenarios and inspect planning simulations. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/campaigns/CampaignStudio.tsx` | Create and maintain campaign plans and their audience, channel, schedule, and offer settings. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/campaigns/CampaignCalendar.tsx` | Review scheduled campaign activity in a calendar view. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/customers/Customer360.tsx` | Search customer profiles and inspect lifecycle, value, consent, and interaction context. Uses synthetic development records. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/audiences/SegmentManager.tsx` | Create and review audience segments and their estimated reach. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/audiences/SegmentManager.tsx` | Preview audience estimates from validated rules against the local synthetic sample. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/offers/OfferCatalog.tsx` | Manage offer catalog records and campaign eligibility details. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/journeys/JourneyBuilder.tsx` | Configure customer journey steps and orchestration paths. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/orchestration/AutomationCenter.tsx` | Manage workflow automation and operational triggers. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/execution/ExecutionConsole.tsx` | Run and inspect simulated campaign execution outcomes; no live delivery provider is called. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/governance/IntegrationHub.tsx` | Review channel adapter requirements and connection state. External channels remain unconnected. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/intelligence/NovaAssistant.tsx` | Ask about synthetic workspace data or draft campaign copy using Gemini when configured, otherwise local templates. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/intelligence/IntelligenceWorkspace.tsx` | Explore explainable, rule-based offer cues and observed aggregates. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/intelligence/ExperimentWorkspace.tsx` | Plan a test hypothesis and preview consent-filtered sample allocation. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/intelligence/IntelligenceWorkspace.tsx` | Explore observed aggregates, descriptive cohorts, and customer/campaign signals. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/reports/ReportsWorkspace.tsx` | Review and export reports from observed campaign and simulation data. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/governance/IntegrationHub.tsx` | Review integration connector requirements and connection status. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/rules/BusinessRuleManager.tsx` | Define eligibility rules, frequency caps, and quiet-hour suppression. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/governance/ApprovalsWorkspace.tsx` | Review pending changes and submit approval decisions according to role. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/governance/FeatureAccessWorkspace.tsx` | Review department feature requests and company module availability. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/governance/AdministrationWorkspace.tsx` | Manage team accounts, roles, departments, account approval, and per-user module access. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/governance/AuditLogWorkspace.tsx` | Inspect the workspace audit trail. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/governance/SettingsWorkspace.tsx` | Configure workspace preferences, modules, branding, and appearance. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
+| `frontend/features/auth/ProfileWorkspace.tsx` | Update profile details, change a password, adjust appearance, and sign out. | See the [full-size module screenshot gallery](#screenshots-super-admin-and-module-workspaces). |
 
+#### Full-size module screenshots
+
+##### Executive Dashboard
+
+![Executive Dashboard — full-size app screenshot](docs/screenshots/super-admin/dashboard.jpg)
+
+##### Scenario Studio
+
+![Scenario Studio — full-size app screenshot](docs/screenshots/super-admin/scenario-studio.jpg)
+
+##### Campaign Studio
+
+![Campaign Studio — full-size app screenshot](docs/screenshots/super-admin/campaign-studio.jpg)
+
+##### Campaign Calendar
+
+![Campaign Calendar — full-size app screenshot](docs/screenshots/super-admin/campaign-calendar.jpg)
+
+##### Customer 360
+
+![Customer 360 — full-size app screenshot](docs/screenshots/super-admin/customer-360.jpg)
+
+##### Audience & Segments
+
+![Audience & Segments — full-size app screenshot](docs/screenshots/super-admin/audience-segments.jpg)
+
+##### AI Segment Builder
+
+![AI Segment Builder — full-size app screenshot](docs/screenshots/super-admin/ai-segment-builder.jpg)
+
+##### Offer Management
+
+![Offer Management — full-size app screenshot](docs/screenshots/super-admin/offer-management.jpg)
+
+##### Journey Orchestration
+
+![Journey Orchestration — full-size app screenshot](docs/screenshots/super-admin/journey-orchestration.jpg)
+
+##### Workflow Automation
+
+![Workflow Automation — full-size app screenshot](docs/screenshots/super-admin/workflow-automation.jpg)
+
+##### Campaign Execution
+
+![Campaign Execution — full-size app screenshot](docs/screenshots/super-admin/campaign-execution.jpg)
+
+##### Channel Management
+
+![Channel Management — full-size app screenshot](docs/screenshots/super-admin/channel-management.jpg)
+
+##### Nova AI Assistant
+
+![Nova AI Assistant — full-size app screenshot](docs/screenshots/super-admin/nova-ai.jpg)
+
+##### Predictive Intelligence
+
+![Predictive Intelligence — full-size app screenshot](docs/screenshots/super-admin/predictive-intelligence.jpg)
+
+##### A/B Testing
+
+![A/B Testing — full-size app screenshot](docs/screenshots/super-admin/ab-testing.jpg)
+
+##### Analytics & Insights
+
+![Analytics & Insights — full-size app screenshot](docs/screenshots/super-admin/analytics-insights.jpg)
+
+##### Reports & Exports
+
+![Reports & Exports — full-size app screenshot](docs/screenshots/super-admin/reports-exports.jpg)
+
+##### Data Integration Hub
+
+![Data Integration Hub — full-size app screenshot](docs/screenshots/super-admin/integrations.jpg)
+
+##### Business Rules Engine
+
+![Business Rules Engine — full-size app screenshot](docs/screenshots/super-admin/business-rules.jpg)
+
+##### Approvals & Governance
+
+![Approvals & Governance — full-size app screenshot](docs/screenshots/super-admin/approvals.jpg)
+
+##### Feature Access
+
+![Feature Access — full-size app screenshot](docs/screenshots/super-admin/feature-access.jpg)
+
+##### User & Role Management
+
+![User & Role Management — full-size app screenshot](docs/screenshots/super-admin/user-roles.jpg)
+
+##### Audit Logs
+
+![Audit Logs — full-size app screenshot](docs/screenshots/super-admin/audit-logs.jpg)
+
+##### System Configuration
+
+![System Configuration — full-size app screenshot](docs/screenshots/super-admin/settings.jpg)
+
+##### Super Admin profile
+
+![Super Admin profile — full-size app screenshot](docs/screenshots/super-admin/profile.jpg)
 Authentication pages are `frontend/app/login/page.tsx`, `signup/page.tsx`, `forgot-password/page.tsx`, and `reset-password/page.tsx`. Dynamic module paths resolve through `frontend/app/[...slug]/page.tsx`.
 
 ## Backend API guide
